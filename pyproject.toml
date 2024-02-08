@@ -6,7 +6,11 @@ authors = ["Da-Emp66 <asherbean10@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = "<3.12,>=3.8"
+supersuit = "^3.9.2"
+pettingzoo = "^1.24.3"
+pygame = "^2.5.2"
+pymunk = "^6.6.0"
 
 
 [build-system]
