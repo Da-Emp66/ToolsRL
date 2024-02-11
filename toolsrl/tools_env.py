@@ -8,6 +8,7 @@ Author: Asher B. Gibson
 
 from typing import Optional, Literal
 
+import pymunk
 import gymnasium
 import numpy as np
 from gymnasium import spaces
