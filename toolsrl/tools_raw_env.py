@@ -3,7 +3,7 @@ from gymnasium.utils import EzPickle
 from pettingzoo import AECEnv
 from pettingzoo.utils import agent_selector, wrappers
 from pettingzoo.utils.conversions import parallel_wrapper_fn
-from tools_env import ToolsBase as _env
+from tools_env import ToolsBase as _env, FPS
 
 
 def env(**kwargs):
@@ -14,7 +14,6 @@ def env(**kwargs):
 
 
 parallel_env = parallel_wrapper_fn(env)
-FPS = 15
 
 
 class raw_env(AECEnv, EzPickle):
@@ -30,7 +29,7 @@ class raw_env(AECEnv, EzPickle):
         AECEnv.__init__(self)
         self.env = _env(*args, **kwargs)
 
-        self.agents = ["pursuer_" + str(r) for r in range(self.env.num_agents)]
+        self.agents = ["handyman_" + str(r) for r in range(self.env.num_agents)]
         self.possible_agents = self.agents[:]
         self.agent_name_mapping = dict(zip(self.agents, list(range(self.num_agents))))
         self._agent_selector = agent_selector(self.agents)

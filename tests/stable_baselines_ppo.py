@@ -8,7 +8,7 @@ import supersuit as ss
 from stable_baselines3 import PPO
 from stable_baselines3.ppo import MlpPolicy
 
-from toolsrl.tools_raw_env import parallel_env
+from toolsrl.tools_raw_env import env, parallel_env, raw_env
 
 
 def train_butterfly_supersuit(
@@ -44,9 +44,9 @@ def train_butterfly_supersuit(
     env.close()
 
 
-def eval(env_fn, num_games: int = 100, render_mode: str | None = None, **env_kwargs):
+def eval(env_constructor, num_games: int = 100, render_mode: str | None = None, **env_kwargs):
     # Evaluate a trained agent vs a random agent
-    env = env_fn.env(render_mode=render_mode, **env_kwargs)
+    env = env_constructor(render_mode=render_mode, **env_kwargs)
 
     print(
         f"\nStarting evaluation on {str(env.metadata['name'])} (num_games={num_games}, render_mode={render_mode})"
@@ -95,7 +95,7 @@ if __name__ == "__main__":
     train_butterfly_supersuit(parallel_env, steps=4096000, seed=41, **env_kwargs)
 
     # Evaluate 10 games (average reward should be positive but can vary significantly)
-    eval(parallel_env, num_games=10, render_mode=None, **env_kwargs)
+    eval(env, num_games=10, render_mode=None, **env_kwargs)
 
     # Watch 2 games
-    eval(parallel_env, num_games=2, render_mode="human", **env_kwargs)
+    eval(env, num_games=2, render_mode="human", **env_kwargs)
