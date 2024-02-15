@@ -11,6 +11,7 @@ supersuit = "^3.9.2"
 pettingzoo = "^1.24.3"
 pygame = "^2.5.2"
 pymunk = "^6.6.0"
+pyyaml = "^6.0.1"
 
 
 [build-system]

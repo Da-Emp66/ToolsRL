@@ -5,7 +5,7 @@ tools:
       y: 0
     scale: 1
     sections:
-      - section1:
+      - head:
           color:
             red: 60
             green: 60
@@ -14,7 +14,7 @@ tools:
           friction: 0.2
           scale: 1
           layer: 1
-          edges:
+          points:
             - point1:
                 x: 0
                 y: 30
@@ -27,7 +27,7 @@ tools:
             - point4:
                 x: 0
                 y: 50
-      - section2:
+      - handle:
           color:
             red: 165
             green: 151
@@ -36,7 +36,7 @@ tools:
           friction: 0.4
           scale: 1
           layer: 2
-          edges:
+          points:
             - point1:
                 x: 17
                 y: 0
@@ -55,7 +55,7 @@ tools:
       y: 0
     scale: 1
     sections:
-      - section1:
+      - body:
           color:
             red: 165
             green: 151
@@ -64,7 +64,7 @@ tools:
           friction: 0.44
           scale: 1
           layer: 1
-          edges:
+          points:
             - point1:
                 x: 0
                 y: 0
@@ -83,7 +83,7 @@ tools:
       y: 50
     scale: 1
     sections:
-      - section1:
+      - shaft:
           color:
             red: 60
             green: 60
@@ -92,7 +92,7 @@ tools:
           friction: 0.2
           scale: 1
           layer: 1
-          edges:
+          points:
             - point1:
                 x: 15
                 y: 0
@@ -111,7 +111,7 @@ tools:
             - point6:
                 x: 0
                 y: 20
-      - section2:
+      - lever:
           color:
             red: 122
             green: 122
@@ -120,7 +120,7 @@ tools:
           friction: 0.9
           scale: 1
           layer: 2
-          edges:
+          points:
             - point1:
                 x: 15
                 y: 0
@@ -136,7 +136,7 @@ tools:
       y: 0
     scale: 1
     sections:
-      - section1:
+      - pick-and-chisel:
           color:
             red: 60
             green: 60
@@ -145,7 +145,7 @@ tools:
           friction: 0.1
           scale: 1
           layer: 1
-          edges:
+          points:
             - point1:
                 x: 17
                 y: 0
@@ -158,7 +158,7 @@ tools:
             - point4:
                 x: 17
                 y: 45
-      - section2:
+      - handle:
           color:
             red: 165
             green: 151
@@ -167,7 +167,7 @@ tools:
           friction: 0.4
           scale: 1
           layer: 2
-          edges:
+          points:
             - point1:
                 x: 0
                 y: 45
