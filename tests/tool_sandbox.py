@@ -13,16 +13,17 @@ PIXEL_SCALE = 30 * 25
 
 def main(args):
     pygame.init()
-    screen = pygame.display.set_mode((600, 600))
+    screen = pygame.display.set_mode((1200, 900))
     pygame.display.set_caption("Tools Sandbox")
     clock = pygame.time.Clock()
-
     space = pymunk.Space()
+    space.gravity = (0.0, 980.0)
+
     draw_options = pymunk.pygame_util.DrawOptions(screen)
 
     tool = None
     with open(args.configuration) as toolfile:
-        tool = Tool({args.tool: yaml.safe_load(toolfile)['tools'][args.tool]})
+        tool = Tool(space, {args.tool: yaml.safe_load(toolfile)['tools'][args.tool]})
         toolfile.close()
 
     def convert_coordinates(value, option="position"):
@@ -62,16 +63,27 @@ def main(args):
 
     add_bounding_box(space)
 
+    dragging = False
+
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 sys.exit(0)
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 sys.exit(0)
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                dragging = True
+            elif event.type == pygame.MOUSEBUTTONUP:
+                dragging = False
+
+        if dragging:
+            pos = pygame.mouse.get_pos()
+            print(pos)
+            tool.reset_position(pos[0], pos[1])
 
         screen.fill((255,255,255))
 
-        tool.draw(screen, convert_coordinates)
+        # tool.draw(screen, convert_coordinates)
     
         space.debug_draw(draw_options)
 

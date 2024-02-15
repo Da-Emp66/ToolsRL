@@ -1,9 +1,9 @@
 tools:
   hammer:
     grip-point:
-      x: 20
+      x: 15
       y: 0
-    scale: 1
+    scale: 2
     sections:
       - head:
           color:
@@ -38,22 +38,22 @@ tools:
           layer: 2
           points:
             - point1:
-                x: 17
+                x: 13
                 y: 0
             - point2:
-                x: 23
+                x: 17
                 y: 0
             - point3:
-                x: 23
+                x: 17
                 y: 30
             - point4:
-                x: 17
+                x: 13
                 y: 30
   stick:
     grip-point:
       x: 5
       y: 0
-    scale: 1
+    scale: 2
     sections:
       - body:
           color:
@@ -73,15 +73,15 @@ tools:
                 y: 0
             - point3:
                 x: 10
-                y: 50
+                y: 100
             - point4:
                 x: 0
-                y: 50
+                y: 100
   crowbar:
     grip-point:
       x: 4
-      y: 50
-    scale: 1
+      y: 100
+    scale: 2
     sections:
       - shaft:
           color:
@@ -104,10 +104,10 @@ tools:
                 y: 20
             - point4:
                 x: 8
-                y: 50
+                y: 100
             - point5:
                 x: 0
-                y: 50
+                y: 100
             - point6:
                 x: 0
                 y: 20
@@ -132,51 +132,51 @@ tools:
                 y: 8
   pickaxe:
     grip-point:
-      x: 20
+      x: 30
       y: 0
-    scale: 1
+    scale: 2
     sections:
       - pick-and-chisel:
           color:
             red: 60
             green: 60
             blue: 60
-          weight: 15
-          friction: 0.1
-          scale: 1
-          layer: 1
-          points:
-            - point1:
-                x: 17
-                y: 0
-            - point2:
-                x: 23
-                y: 0
-            - point3:
-                x: 23
-                y: 45
-            - point4:
-                x: 17
-                y: 45
-      - handle:
-          color:
-            red: 165
-            green: 151
-            blue: 59
           weight: 6
           friction: 0.4
           scale: 1
-          layer: 2
+          layer: 1
           points:
             - point1:
                 x: 0
                 y: 45
             - point2:
-                x: 30
+                x: 60
                 y: 45
             - point3:
-                x: 22
+                x: 26
                 y: 50
             - point4:
-                x: 18
+                x: 34
                 y: 50
+      - handle:
+          color:
+            red: 165
+            green: 151
+            blue: 59
+          weight: 15
+          friction: 0.1
+          scale: 1
+          layer: 2
+          points:
+            - point1:
+                x: 26
+                y: 0
+            - point2:
+                x: 34
+                y: 0
+            - point3:
+                x: 34
+                y: 45
+            - point4:
+                x: 26
+                y: 45
