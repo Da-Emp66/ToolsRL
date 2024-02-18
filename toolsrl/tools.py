@@ -1,20 +1,21 @@
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 
 import yaml
 import pygame
 import pymunk
 from pymunk.constraints import PivotJoint
 
+
 EXPECTED_TOOL_PROPERTIES = {
-    "color": (0, 0, 0),
+    "color": {"red":0,"green":0,"blue":0},
     "grip-point": (0, 0),
     "scale": 1.0,
     "sections": [],
 }
 EXPECTED_TOOL_SECTION_PROPERTIES = {
-    "color": (0, 0, 0),
+    "color": {"red":0,"green":0,"blue":0},
     "edges": [],
-    "friction": 0.5,
+    "friction": None,
     "layer": 1,
     "scale": 1.0,
     "weight": 10,
@@ -22,9 +23,17 @@ EXPECTED_TOOL_SECTION_PROPERTIES = {
 
 class ToolSection:
     def create(self) -> List[pymunk.Segment]:
-        self.shape = [pymunk.Segment(self.body, edge[0] * self.scale, edge[1] * self.scale, self.line_width) for edge in self.edges]
-        self.space.add(*self.shape)
-        return self.shape
+        self.shapes = [pymunk.Segment(self.body, edge[0], edge[1], self.line_width) for edge in self.edges]
+
+        for segment in self.shapes:
+            segment.color = (self.color['red'], self.color['green'], self.color['blue'], 255)
+
+        if self.friction is not None:
+            for idx, _ in enumerate(self.shapes):
+                self.shapes[idx].friction = self.friction
+
+        self.space.add(*self.shapes)
+        return self
 
     def load_from_dict(self, description: Dict[str, Any]):
         if len(description.keys()) > 1:
@@ -37,17 +46,18 @@ class ToolSection:
         for property in properties:
             self.__setattr__(property.replace("-", "_"), properties[property])
 
-        self.points = list(map(lambda point: (point[next(iter(point))]['x'] * self.scale, point[next(iter(point))]['y'] * self.scale), self.points))
+        self.points = list(map(lambda point: (self.coordinate_conversion_fn((point[next(iter(point))]['x'] * self.scale, point[next(iter(point))]['y'] * self.scale))), self.points))
         self._update_edges()
         
-    def __init__(self, space: pymunk.Space, body: pymunk.Body, description: Dict[str, Any]):
+    def __init__(self, space: pymunk.Space, body: pymunk.Body, description: Dict[str, Any], coordinate_conversion_fn: Optional[Any] = lambda x: x):
         self.space = space
         self.body = body
-        self.line_width = 3.0
+        self.coordinate_conversion_fn = coordinate_conversion_fn
+        self.line_width = 3.0 # TODO: Make this configurable
         self.load_from_dict(description)
     
-    def draw(self, display: pygame.Surface, convert_coordinates: Any) -> pygame.Rect:
-        return pygame.draw.polygon(display, pygame.Color(self.color['red'], self.color['green'], self.color['blue']), list(map(lambda point: convert_coordinates(point), self.points)), width=int(self.line_width))
+    # def draw(self, display: pygame.Surface, convert_coordinates: Any) -> pygame.Rect:
+    #     return pygame.draw.polygon(display, pygame.Color(self.color['red'], self.color['green'], self.color['blue']), list(map(lambda point: convert_coordinates(point), self.points)), width=int(self.line_width))
     
     def _scale(self, factor: int | float) -> 'ToolSection':
         self.points = [(int(point[0] * factor), int(point[1] * factor)) for point in self.points]
@@ -66,11 +76,23 @@ class ToolSection:
 
     def __rmul__(self, other: int | float) -> 'ToolSection':
         return self._scale(other)
+    
+    def __add__(self, other: Tuple[int, int]):
+        self.points = [(int(point[0] + other[0]), int(point[1] + other[1])) for point in self.points]
+        self._update_edges()
+        return self
+
+    def __radd__(self, other: Tuple[int, int]):
+        self.points = [(int(point[0] + other[0]), int(point[1] + other[1])) for point in self.points]
+        self._update_edges()
+        return self
 
 class Tool:
     def create(self):
         self.space.add(self.body)
-        self.shape = [section.create() for section in self.sections]
+        self.sections.sort()
+        self.shapes = [section.create() for section in self.sections[::-1]]
+        return self
 
     def load_from_dict(self, description: Dict[str, Any]):
         if len(description.keys()) > 1:
@@ -102,19 +124,20 @@ class Tool:
         
         self.load_from_dict({name: description})
 
-    def __init__(self, space: pymunk.Space, description: Dict[str, Any]):
+    def __init__(self, space: pymunk.Space, description: Dict[str, Any], initial_point: Tuple[int, int] = (0, 0), coordinate_conversion_fn: Optional[Any] = lambda x: x):
         self.space = space
         self.body = pymunk.Body(10, 98)
+        self.coordinate_conversion_fn = coordinate_conversion_fn
         self.load_from_dict(description)
         self.create()
 
         self.grip = pymunk.Body(10, 98, pymunk.Body.STATIC)
-        self.rotation_joint = PivotJoint(self.grip, self.body, (0, 0), (self.grip_point['x'] * self.scale, self.grip_point['y'] * self.scale))
+        self.rotation_joint = PivotJoint(self.grip, self.body, initial_point, (self.grip_point['x'] * self.scale, self.grip_point['y'] * self.scale))
         self.space.add(self.grip, self.rotation_joint)
 
-    def draw(self, display: pygame.Surface, convert_coordinates: Any) -> List[pygame.Rect]:
-        self.sections.sort()
-        return [section.draw(display, convert_coordinates) for section in self.sections[::-1]]
+    # def draw(self, display: pygame.Surface, convert_coordinates: Any) -> List[pygame.Rect]:
+    #     self.sections.sort()
+    #     return [section.draw(display, convert_coordinates) for section in self.sections[::-1]]
     
     def reset_position(self, x, y):
         self.grip.position = x, y

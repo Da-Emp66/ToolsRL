@@ -3,7 +3,7 @@ tools:
     grip-point:
       x: 15
       y: 0
-    scale: 2
+    scale: 3
     sections:
       - head:
           color:
@@ -113,9 +113,9 @@ tools:
                 y: 20
       - lever:
           color:
-            red: 122
-            green: 122
-            blue: 122
+            red: 255
+            green: 60
+            blue: 60
           weight: 4
           friction: 0.9
           scale: 1
@@ -134,7 +134,7 @@ tools:
     grip-point:
       x: 30
       y: 0
-    scale: 2
+    scale: 3
     sections:
       - pick-and-chisel:
           color:
@@ -153,11 +153,11 @@ tools:
                 x: 60
                 y: 45
             - point3:
-                x: 26
-                y: 50
-            - point4:
                 x: 34
-                y: 50
+                y: 55
+            - point4:
+                x: 26
+                y: 55
       - handle:
           color:
             red: 165
@@ -180,3 +180,147 @@ tools:
             - point4:
                 x: 26
                 y: 45
+goals:
+  open-the-chest:
+    environment-objects:
+      - chest-base:
+          type: static
+          shape: polygon
+          points:
+            - point1:
+                x: 20
+                y: 0
+            - point2:
+                x: 120
+                y: 0
+            - point3:
+                x: 140
+                y: 50
+            - point4:
+                x: 0
+                y: 50
+      - chest-top:
+          type: dynamic
+          shape: polygon
+          weight: 80
+          points:
+            - point1:
+                x: 0
+                y: 61
+            - point2:
+                x: 140
+                y: 61
+            - point3:
+                x: 120
+                y: 80
+            - point4:
+                x: 20
+                y: 80
+    accomplishment-criteria:
+      object: chest-top
+      touches:
+        x: 
+        y: 
+  kick-the-ball:
+    environment-objects:
+      - impediment:
+          type: static
+          shape: polygon
+          points:
+            - point1:
+                x: 
+                y: 
+            - point2:
+                x: 
+                y: 
+            - point3:
+                x: 
+                y: 
+            - point4:
+                x: 
+                y: 
+      - ramp:
+          type: static
+          shape: polygon
+          points:
+            - point1:
+                x: 
+                y: 
+            - point2:
+                x: 
+                y: 
+            - point3:
+                x: 
+                y: 
+            - point4:
+                x: 
+                y: 
+      - ball:
+          type: dynamic
+          shape: circle
+          radius: 15.0
+          weight: 80
+    accomplishment-criteria:
+      object: ball
+      touches:
+        x: 
+        y: 
+  hit-the-nail:
+    environment-objects:
+      - wall1:
+          type: static
+          shape: polygon
+          points:
+            - point1:
+                x: 
+                y: 
+            - point2:
+                x: 
+                y: 
+            - point3:
+                x: 
+                y: 
+            - point4:
+                x: 
+                y: 
+      - wall2:
+          type: static
+          shape: polygon
+          points:
+            - point1:
+                x: 
+                y: 
+            - point2:
+                x: 
+                y: 
+            - point3:
+                x: 
+                y: 
+            - point4:
+                x: 
+                y: 
+      - nail:
+          type: dynamic
+          shape: polygon
+          weight: 20
+          points:
+            - point1:
+                x: 
+                y: 
+            - point2:
+                x: 
+                y: 
+            - point3:
+                x: 
+                y: 
+            - point4:
+                x: 
+                y: 
+            - point5:
+                x: 
+                y: 
+    accomplishment-criteria:
+      object: nail
+      touches:
+        x: 
+        y: 
