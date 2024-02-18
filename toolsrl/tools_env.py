@@ -19,7 +19,7 @@ import yaml
 DEFAULT_CONFIG = "./configurations/tools_env_config.yaml"
 FPS = 15
 
-class ToolsBase:
+class ToolsBaseEnvironment:
     def __init__(
             self,
             configuration_filename: str = DEFAULT_CONFIG,

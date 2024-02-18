@@ -216,11 +216,21 @@ goals:
             - point4:
                 x: 20
                 y: 80
+    hinges:
+      - hinge1:
+          - chest-base:
+              point:
+                x: 0
+                y: 50
+          - chest-top:
+              point:
+                x: 0
+                y: 61
     accomplishment-criteria:
       object: chest-top
       touches:
-        x: 
-        y: 
+        x: 255
+        y: 0
   kick-the-ball:
     environment-objects:
       - impediment:
@@ -228,43 +238,40 @@ goals:
           shape: polygon
           points:
             - point1:
-                x: 
-                y: 
+                x: 400
+                y: 1200
             - point2:
-                x: 
-                y: 
+                x: 400
+                y: 100
             - point3:
-                x: 
-                y: 
+                x: 800
+                y: 260
             - point4:
-                x: 
-                y: 
+                x: 800
+                y: 1200
       - ramp:
           type: static
           shape: polygon
           points:
             - point1:
-                x: 
-                y: 
+                x: 400
+                y: 0
             - point2:
-                x: 
-                y: 
+                x: 800
+                y: 0
             - point3:
-                x: 
-                y: 
-            - point4:
-                x: 
-                y: 
+                x: 800
+                y: 140
       - ball:
           type: dynamic
           shape: circle
-          radius: 15.0
+          radius: 24.0
           weight: 80
     accomplishment-criteria:
       object: ball
       touches:
-        x: 
-        y: 
+        x: 1192
+        y: 1192
   hit-the-nail:
     environment-objects:
       - wall1:
@@ -272,53 +279,58 @@ goals:
           shape: polygon
           points:
             - point1:
-                x: 
-                y: 
+                x: 200
+                y: 1200
             - point2:
-                x: 
-                y: 
+                x: 200
+                y: 700
             - point3:
-                x: 
-                y: 
+                x: 240
+                y: 700
             - point4:
-                x: 
-                y: 
+                x: 240
+                y: 1200
       - wall2:
           type: static
           shape: polygon
           points:
             - point1:
-                x: 
-                y: 
+                x: 200
+                y: 600
             - point2:
-                x: 
-                y: 
+                x: 200
+                y: 0
             - point3:
-                x: 
-                y: 
+                x: 240
+                y: 0
             - point4:
-                x: 
-                y: 
+                x: 240
+                y: 600
       - nail:
           type: dynamic
           shape: polygon
-          weight: 20
           points:
             - point1:
-                x: 
-                y: 
+                x: 0
+                y: 580
             - point2:
-                x: 
-                y: 
+                x: 0
+                y: 720
             - point3:
-                x: 
-                y: 
+                x: 10
+                y: 680
             - point4:
-                x: 
-                y: 
+                x: 380
+                y: 680
             - point5:
-                x: 
-                y: 
+                x: 400
+                y: 650
+            - point6:
+                x: 380
+                y: 620
+            - point7:
+                x: 10
+                y: 620
     accomplishment-criteria:
       object: nail
       touches:

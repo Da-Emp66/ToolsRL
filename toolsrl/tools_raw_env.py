@@ -3,7 +3,7 @@ from gymnasium.utils import EzPickle
 from pettingzoo import AECEnv
 from pettingzoo.utils import agent_selector, wrappers
 from pettingzoo.utils.conversions import parallel_wrapper_fn
-from tools_env import ToolsBase as _env, FPS
+from tools_env import ToolsBaseEnvironment as _env, FPS
 
 
 def env(**kwargs):

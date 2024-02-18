@@ -4,11 +4,12 @@ import numpy as np
 import yaml
 import pygame
 import pymunk
-from pymunk.constraints import PivotJoint
+from pymunk.constraints import PivotJoint, PinJoint
 
 EXPECTED_GOAL_PROPERTIES = {
     "accomplishment-criteria": None,
     "environment-objects": [],
+    "hinges": None,
     "scale": 1.0,
 }
 
@@ -31,13 +32,14 @@ class EnvironmentObject:
         elif self.type == "dynamic":
             body_type = pymunk.Body.DYNAMIC
 
-        self.body = pymunk.Body(self.weight, 98, body_type)
+        self.body = pymunk.Body(self.weight, 10000000000, body_type)
         self.space.add(self.body)
 
         if self.shape == "polygon":
             self.shapes = [pymunk.Segment(self.body, edge[0], edge[1], self.line_width) for edge in self.edges]
         elif self.shape == "circle":
             self.shapes = [pymunk.Circle(self.body, self.radius)]
+            
 
         if self.friction is not None:
             for idx, _ in enumerate(self.shapes):
@@ -61,8 +63,9 @@ class EnvironmentObject:
         self.points = list(map(lambda point: (self.coordinate_conversion_fn((point[next(iter(point))]['x'] * self.scale, point[next(iter(point))]['y'] * self.scale))), self.points))
         self._update_edges()
 
-    def __init__(self, space: pymunk.Space, description: Dict[str, Any], coordinate_conversion_fn: Optional[Any] = lambda x: x):
+    def __init__(self, space: pymunk.Space, description: Dict[str, Any], initial_point: Tuple[int, int] = (0, 0), coordinate_conversion_fn: Optional[Any] = lambda x: x):
         self.space = space
+        self.initial_point = initial_point
         self.coordinate_conversion_fn = coordinate_conversion_fn
         self.line_width = 7.0 # TODO: Make this configurable
         self.load_from_dict(description)
@@ -96,9 +99,39 @@ class EnvironmentObject:
 class Goal:
     def create(self):
         self.shapes = [environment_object.create() for environment_object in self.environment_objects]
+        
         for environment_object in self.environment_objects:
             if environment_object.type == "dynamic":
                 environment_object.body.position = self.initial_point
+                environment_object.body.velocity = (0, 0)
+
+        if self.hinges is not None:
+            all_hinges, hinge_objects, hinge_points = [], [], []
+            for hinge in self.hinges:
+                hinge_name = next(iter(hinge))
+                hinge_details = hinge[hinge_name]
+                hinge_objects = [environment_object for environment_object in hinge_details]
+                hinge_object_names = [next(iter(environment_object)) for environment_object in hinge_objects]
+                hinge_points = [hinge_object[hinge_object_name]['point'] for hinge_object, hinge_object_name in zip(hinge_objects, hinge_object_names)]
+                assert len(hinge_object_names) == len(hinge_points) == 2, "Each hinge can only have 2 objects and 2 points (1 per object). No more, no less <(*_,*)>"
+                all_hinges.append((hinge_object_names, hinge_points))
+
+            def get_body(self, environment_object_name: str):
+                for environment_object in self.environment_objects:
+                    if environment_object.name == environment_object_name:
+                        return environment_object.body
+                return None
+            
+            # TODO: Variably adjust coordinates if the body is dynamic
+            self.hinge_shapes = [
+                PinJoint(
+                    *[get_body(self, hinge_object_name) for hinge_object_name in hinge_object_names],
+                    *list(map(lambda point: (self.initial_point[0] - point['x'], self.initial_point[1] - point['y']), hinge_points))
+                ) for hinge_object_names, hinge_points in all_hinges
+            ]
+
+            self.space.add(*self.hinge_shapes)
+        
         return self
 
     def load_from_dict(self, description: Dict[str, Any]):
@@ -112,8 +145,8 @@ class Goal:
         for property in properties:
             self.__setattr__(property.replace("-", "_"), properties[property])
         
-        self.environment_objects = [EnvironmentObject(self.space, environment_object) * -self.scale for environment_object in self.environment_objects]
-        self.environment_objects = [env_obj + self.initial_point if env_obj.type == "static" else env_obj for env_obj in self.environment_objects]
+        self.environment_objects = [EnvironmentObject(self.space, environment_object, self.initial_point) * -self.scale for environment_object in self.environment_objects]
+        self.environment_objects = [environment_object + self.initial_point if environment_object.type == "static" else environment_object for environment_object in self.environment_objects]
         
     def __init__(self, space: pymunk.Space, description: Dict[str, Any], initial_point: Tuple[int, int] = (0, 0), coordinate_conversion_fn: Optional[Any] = lambda x: x):
         self.space = space

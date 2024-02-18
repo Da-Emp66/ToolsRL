@@ -53,7 +53,7 @@ class ToolSection:
         self.space = space
         self.body = body
         self.coordinate_conversion_fn = coordinate_conversion_fn
-        self.line_width = 3.0 # TODO: Make this configurable
+        self.line_width = 7.0 # TODO: Make this configurable
         self.load_from_dict(description)
     
     # def draw(self, display: pygame.Surface, convert_coordinates: Any) -> pygame.Rect:

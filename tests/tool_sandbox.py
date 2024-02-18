@@ -9,7 +9,7 @@ import pymunk.pygame_util
 from toolsrl.tools import Tool
 from toolsrl.goals import Goal
 
-FPS = 50.0
+FPS = 100.0
 WINDOW_SIZE_X = 1200
 WINDOW_SIZE_Y = 900
 BARRIER_WIDTH = 1000
@@ -21,8 +21,18 @@ def main(args):
     clock = pygame.time.Clock()
     space = pymunk.Space()
     space.gravity = (0.0, 980.0)
-    initial_tool_pos = (600, 450)
-    initial_goal_pos = (2*WINDOW_SIZE_X/3, WINDOW_SIZE_Y) # In PyGame Coordinates
+    initial_tool_pos = None
+    initial_goal_pos = None # In PyGame Coordinates
+
+    if args.goal == "open-the-chest":
+        initial_tool_pos = (WINDOW_SIZE_X/2, WINDOW_SIZE_Y/2)
+        initial_goal_pos = (2*WINDOW_SIZE_X/3, WINDOW_SIZE_Y)
+    elif args.goal == "kick-the-ball":
+        initial_tool_pos = (7*WINDOW_SIZE_X/8, 3*WINDOW_SIZE_Y/8)
+        initial_goal_pos = (WINDOW_SIZE_X, WINDOW_SIZE_Y)
+    elif args.goal == "hit-the-nail":
+        initial_tool_pos = (7*WINDOW_SIZE_X/8, 7*WINDOW_SIZE_Y/8)
+        initial_goal_pos = (2*WINDOW_SIZE_X/3, WINDOW_SIZE_Y)
 
     draw_options = pymunk.pygame_util.DrawOptions(screen)
 
