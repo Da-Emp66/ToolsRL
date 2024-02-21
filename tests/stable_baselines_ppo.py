@@ -16,7 +16,6 @@ def train_butterfly_supersuit(
 ):
     # Train a single model to play as each agent in a cooperative Parallel environment
     env = parallel_env(**env_kwargs)
-
     env.reset(seed=seed)
 
     print(f"Starting training on {str(env.metadata['name'])}.")
@@ -34,13 +33,9 @@ def train_butterfly_supersuit(
     )
 
     model.learn(total_timesteps=steps)
-
     model.save(f"{env.unwrapped.metadata.get('name')}_{time.strftime('%Y%m%d-%H%M%S')}")
-
     print("Model has been saved.")
-
     print(f"Finished training on {str(env.unwrapped.metadata['name'])}.")
-
     env.close()
 
 
@@ -48,9 +43,7 @@ def eval(env_constructor, num_games: int = 100, render_mode: str | None = None, 
     # Evaluate a trained agent vs a random agent
     env = env_constructor(render_mode=render_mode, **env_kwargs)
 
-    print(
-        f"\nStarting evaluation on {str(env.metadata['name'])} (num_games={num_games}, render_mode={render_mode})"
-    )
+    print(f"\nStarting evaluation on {str(env.metadata['name'])} (num_games={num_games}, render_mode={render_mode})")
 
     try:
         latest_policy = max(
@@ -63,7 +56,6 @@ def eval(env_constructor, num_games: int = 100, render_mode: str | None = None, 
     model = PPO.load(latest_policy)
 
     rewards = {agent: 0 for agent in env.possible_agents}
-
     # Note: We train using the Parallel API but evaluate using the AEC API
     # SB3 models are designed for single-agent settings, we get around this by using he same model for every agent
     for i in range(num_games):

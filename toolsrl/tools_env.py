@@ -92,140 +92,36 @@ class ToolsBaseEnvironment:
         obs_for_environment = self.max_environment_objects * (2 + 2 * self.max_vertices_per_environment_object + 3 + 9)
         obs_dim = 5 + obs_for_tool + obs_for_environment
 
-        obs_space = spaces.Box(
+        observation_space = spaces.Box(
             low=np.float32(-np.sqrt(2)),
             high=np.float32(np.sqrt(2)),
             shape=(obs_dim,),
             dtype=np.float32,
         )
 
-        act_space = spaces.Box(
+        action_space = spaces.Box(
             low=np.float32(-1.0),
             high=np.float32(1.0),
             shape=(3,),
             dtype=np.float32,
         )
 
-        # Make a copy of the observation space and action space for each agent
-        # to see and use, respectively
-        self.observation_space = [obs_space for _ in range(self.num_handymen)]
-        self.action_space = [act_space for _ in range(self.num_handymen)]
+        # Make a copy of the observation space and action
+        # space for each agent to see and use, respectively
+        self.per_agent_observation_spaces = [observation_space for _ in range(self.num_handymen)]
+        self.per_agent_action_spaces = [action_space for _ in range(self.num_handymen)]
 
     def _seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
     def add_obj(self):
-        """Create all moving object instances."""
-        self.pursuers = []
-        self.evaders = []
-        self.poisons = []
-        self.obstacles = []
-
-        for i in range(self.n_pursuers):
-            x, y = self._generate_coord(self.base_radius)
-            self.pursuers.append(
-                Pursuers(
-                    x,
-                    y,
-                    self.pursuer_max_accel,
-                    self.pursuer_speed,
-                    radius=self.base_radius,
-                    collision_type=i + 1,
-                    n_sensors=self.n_sensors,
-                    sensor_range=self.sensor_range,
-                    speed_features=self.speed_features,
-                )
-            )
-
-        for i in range(self.n_evaders):
-            x, y = self._generate_coord(2 * self.base_radius)
-            vx, vy = (
-                (2 * self.np_random.random(1) - 1) * self.evader_speed,
-                (2 * self.np_random.random(1) - 1) * self.evader_speed,
-            )
-            self.evaders.append(
-                Evaders(
-                    x,
-                    y,
-                    vx,
-                    vy,
-                    radius=2 * self.base_radius,
-                    collision_type=i + 1000,
-                    max_speed=self.evader_speed,
-                )
-            )
-
-        for i in range(self.n_poisons):
-            x, y = self._generate_coord(0.75 * self.base_radius)
-            vx, vy = (
-                (2 * self.np_random.random(1) - 1) * self.poison_speed,
-                (2 * self.np_random.random(1) - 1) * self.poison_speed,
-            )
-            self.poisons.append(
-                Poisons(
-                    x,
-                    y,
-                    vx,
-                    vy,
-                    radius=0.75 * self.base_radius,
-                    collision_type=i + 2000,
-                    max_speed=self.poison_speed,
-                )
-            )
-
-        for _ in range(self.n_obstacles):
-            self.obstacles.append(
-                Obstacle(
-                    self.pixel_scale / 2,
-                    self.pixel_scale / 2,
-                    radius=self.obstacle_radius,
-                )
-            )
+        pass
 
     def close(self):
         if self.screen is not None:
             pygame.quit()
             self.screen = None
-
-    def convert_coordinates(self, value, option="position"):
-        """This function converts coordinates in pymunk into pygame coordinates.
-
-        The coordinate system in pygame is:
-                 (0, 0) +-------+ (WINDOWSIZE, 0)           + ──── → x
-                        |       |                           │
-                        |       |                           │
-        (0, WINDOWSIZE) +-------+ (WINDOWSIZE, WINDOWSIZE)  ↓ y
-        The coordinate system in pymunk is:
-        (0, WINDOWSIZE) +-------+ (WINDOWSIZE, WINDOWSIZE)  ↑ y
-                        |       |                           │
-                        |       |                           │
-                 (0, 0) +-------+ (WINDOWSIZE, 0)           + ──── → x
-        """
-        if option == "position":
-            return int(value[0]), self.pixel_scale - int(value[1])
-
-        if option == "velocity":
-            return value[0], -value[1]
-
-    def _generate_coord(self, radius):
-        """Generates a random coordinate for an object with given radius such that it does not collide with an obstacle.
-
-        radius: radius of the object
-        """
-        # Sample random coordinate (x, y) with x, y ∈ [0, pixel_scale]
-        coord = self.np_random.random(2) * self.pixel_scale
-
-        # If too close to obstacles, resample
-        for obstacle in self.obstacles:
-            x, y = obstacle.body.position
-            while (
-                ssd.cdist(coord[None, :], np.array([[x, y]]))
-                <= radius * 2 + obstacle.radius
-            ):
-                coord = self.np_random.random(2) * self.pixel_scale
-
-        return coord
 
     def add(self):
         """Add all moving objects to PyMunk space."""
@@ -235,137 +131,88 @@ class ToolsBaseEnvironment:
             for obj in obj_list:
                 obj.add(self.space)
 
-    def add_bounding_box(self):
-        """Create bounding boxes around the window so that the moving object will not escape the view window.
-
-        The four bounding boxes are aligned in the following way:
-        (-100, WINDOWSIZE + 100) ┌────┬────────────────────────────┬────┐ (WINDOWSIZE + 100, WINDOWSIZE + 100)
-                                 │xxxx│////////////////////////////│xxxx│
-                                 ├────┼────────────────────────────┼────┤
-                                 │////│    (WINDOWSIZE, WINDOWSIZE)│////│
-                                 │////│                            │////│
-                                 │////│(0, 0)                      │////│
-                                 ├────┼────────────────────────────┼────┤
-                                 │xxxx│////////////////////////////│xxxx│
-                    (-100, -100) └────┴────────────────────────────┴────┘ (WINDOWSIZE + 100, -100)
-        where "x" represents overlapped regions.
-        """
-        # Bounding dox edges
-        pts = [
-            (-100, -100),
-            (self.pixel_scale + 100, -100),
-            (self.pixel_scale + 100, self.pixel_scale + 100),
-            (-100, self.pixel_scale + 100),
-        ]
-
-        self.barriers = []
-
-        for i in range(4):
-            self.barriers.append(
-                pymunk.Segment(self.space.static_body, pts[i], pts[(i + 1) % 4], 100)
-            )
-            self.barriers[-1].elasticity = 0.999
-            self.space.add(self.barriers[-1])
-
     def add_handlers(self):
-        # Collision handlers for pursuers v.s. evaders & poisons
-        for pursuer in self.pursuers:
-            for obj in self.evaders:
-                self.handlers.append(
-                    self.space.add_collision_handler(
-                        pursuer.shape.collision_type, obj.shape.collision_type
-                    )
-                )
-                self.handlers[-1].begin = self.pursuer_evader_begin_callback
-                self.handlers[-1].separate = self.pursuer_evader_separate_callback
+        pass
+        # # Collision handlers for pursuers v.s. evaders & poisons
+        # for pursuer in self.pursuers:
+        #     for obj in self.evaders:
+        #         self.handlers.append(
+        #             self.space.add_collision_handler(
+        #                 pursuer.shape.collision_type, obj.shape.collision_type
+        #             )
+        #         )
+        #         self.handlers[-1].begin = self.pursuer_evader_begin_callback
+        #         self.handlers[-1].separate = self.pursuer_evader_separate_callback
 
-            for obj in self.poisons:
-                self.handlers.append(
-                    self.space.add_collision_handler(
-                        pursuer.shape.collision_type, obj.shape.collision_type
-                    )
-                )
-                self.handlers[-1].begin = self.pursuer_poison_begin_callback
+        #     for obj in self.poisons:
+        #         self.handlers.append(
+        #             self.space.add_collision_handler(
+        #                 pursuer.shape.collision_type, obj.shape.collision_type
+        #             )
+        #         )
+        #         self.handlers[-1].begin = self.pursuer_poison_begin_callback
 
-        # Collision handlers for poisons v.s. evaders
-        for poison in self.poisons:
-            for evader in self.evaders:
-                self.handlers.append(
-                    self.space.add_collision_handler(
-                        poison.shape.collision_type, evader.shape.collision_type
-                    )
-                )
-                self.handlers[-1].begin = self.return_false_begin_callback
+        # # Collision handlers for poisons v.s. evaders
+        # for poison in self.poisons:
+        #     for evader in self.evaders:
+        #         self.handlers.append(
+        #             self.space.add_collision_handler(
+        #                 poison.shape.collision_type, evader.shape.collision_type
+        #             )
+        #         )
+        #         self.handlers[-1].begin = self.return_false_begin_callback
 
-        # Collision handlers for evaders v.s. evaders
-        for i in range(self.n_evaders):
-            for j in range(i, self.n_evaders):
-                if not i == j:
-                    self.handlers.append(
-                        self.space.add_collision_handler(
-                            self.evaders[i].shape.collision_type,
-                            self.evaders[j].shape.collision_type,
-                        )
-                    )
-                    self.handlers[-1].begin = self.return_false_begin_callback
+        # # Collision handlers for evaders v.s. evaders
+        # for i in range(self.n_evaders):
+        #     for j in range(i, self.n_evaders):
+        #         if not i == j:
+        #             self.handlers.append(
+        #                 self.space.add_collision_handler(
+        #                     self.evaders[i].shape.collision_type,
+        #                     self.evaders[j].shape.collision_type,
+        #                 )
+        #             )
+        #             self.handlers[-1].begin = self.return_false_begin_callback
 
-        # Collision handlers for poisons v.s. poisons
-        for i in range(self.n_poisons):
-            for j in range(i, self.n_poisons):
-                if not i == j:
-                    self.handlers.append(
-                        self.space.add_collision_handler(
-                            self.poisons[i].shape.collision_type,
-                            self.poisons[j].shape.collision_type,
-                        )
-                    )
-                    self.handlers[-1].begin = self.return_false_begin_callback
+        # # Collision handlers for poisons v.s. poisons
+        # for i in range(self.n_poisons):
+        #     for j in range(i, self.n_poisons):
+        #         if not i == j:
+        #             self.handlers.append(
+        #                 self.space.add_collision_handler(
+        #                     self.poisons[i].shape.collision_type,
+        #                     self.poisons[j].shape.collision_type,
+        #                 )
+        #             )
+        #             self.handlers[-1].begin = self.return_false_begin_callback
 
-        # Collision handlers for pursuers v.s. pursuers
-        for i in range(self.n_pursuers):
-            for j in range(i, self.n_pursuers):
-                if not i == j:
-                    self.handlers.append(
-                        self.space.add_collision_handler(
-                            self.pursuers[i].shape.collision_type,
-                            self.pursuers[j].shape.collision_type,
-                        )
-                    )
-                    self.handlers[-1].begin = self.return_false_begin_callback
+        # # Collision handlers for pursuers v.s. pursuers
+        # for i in range(self.n_pursuers):
+        #     for j in range(i, self.n_pursuers):
+        #         if not i == j:
+        #             self.handlers.append(
+        #                 self.space.add_collision_handler(
+        #                     self.pursuers[i].shape.collision_type,
+        #                     self.pursuers[j].shape.collision_type,
+        #                 )
+        #             )
+        #             self.handlers[-1].begin = self.return_false_begin_callback
 
     def reset(self):
-        self.add_obj()
         self.frames = 0
 
-        # Initialize obstacles positions
-        if self.initial_obstacle_coord is None:
-            for i, obstacle in enumerate(self.obstacles):
-                obstacle_position = (
-                    self.np_random.random((self.n_obstacles, 2)) * self.pixel_scale
-                )
-                obstacle.body.position = (
-                    obstacle_position[0, 0],
-                    obstacle_position[0, 1],
-                )
-        else:
-            for i, obstacle in enumerate(self.obstacles):
-                obstacle.body.position = (
-                    self.initial_obstacle_coord[i][0] * self.pixel_scale,
-                    self.initial_obstacle_coord[i][1] * self.pixel_scale,
-                )
-
         # Add objects to space
+        self.add_bounding_box()
         self.add()
         self.add_handlers()
-        self.add_bounding_box()
 
         # Get observation
         obs_list = self.observe_list()
 
-        self.last_rewards = [np.float64(0) for _ in range(self.n_pursuers)]
-        self.control_rewards = [0 for _ in range(self.n_pursuers)]
-        self.behavior_rewards = [0 for _ in range(self.n_pursuers)]
-        self.last_dones = [False for _ in range(self.n_pursuers)]
+        self.last_rewards = [np.float64(0) for _ in range(self.num_handymen)]
+        self.control_rewards = [0 for _ in range(self.num_handymen)]
+        self.behavior_rewards = [0 for _ in range(self.num_handymen)]
+        self.last_dones = [False for _ in range(self.num_handymen)]
         self.last_obs = obs_list
 
         return obs_list[0]
@@ -395,8 +242,8 @@ class ToolsBaseEnvironment:
 
         # Average thrust penalty among all agents, and assign each agent global portion designated by (1 - local_ratio)
         self.control_rewards = (
-            (accel_penalty / self.n_pursuers)
-            * np.ones(self.n_pursuers)
+            (accel_penalty / self.num_handymen)
+            * np.ones(self.num_handymen)
             * (1 - self.local_ratio)
         )
 
@@ -409,7 +256,7 @@ class ToolsBaseEnvironment:
             obs_list = self.observe_list()
             self.last_obs = obs_list
 
-            for id in range(self.n_pursuers):
+            for idx in range(self.num_handymen):
                 p = self.pursuers[id]
 
                 # reward for food caught, encountered and poison
@@ -454,198 +301,72 @@ class ToolsBaseEnvironment:
             _pursuer_distances = []
             _pursuer_velocities = []
 
-            for obstacle in self.obstacles:
-                obstacle_distance, _ = pursuer.get_sensor_reading(
-                    obstacle.body.position, obstacle.radius, obstacle.body.velocity, 0.0
-                )
-                obstacle_distances.append(obstacle_distance)
-
-            obstacle_sensor_vals = self.get_sensor_readings(
-                obstacle_distances, pursuer.sensor_range
-            )
-
-            barrier_distances = pursuer.get_sensor_barrier_readings()
-
-            for evader in self.evaders:
-                evader_distance, evader_velocity = pursuer.get_sensor_reading(
-                    evader.body.position,
-                    evader.radius,
-                    evader.body.velocity,
-                    self.evader_speed,
-                )
-                evader_distances.append(evader_distance)
-                evader_velocities.append(evader_velocity)
-
-            (
-                evader_sensor_distance_vals,
-                evader_sensor_velocity_vals,
-            ) = self.get_sensor_readings(
-                evader_distances,
-                pursuer.sensor_range,
-                velocites=evader_velocities,
-            )
-
-            for poison in self.poisons:
-                poison_distance, poison_velocity = pursuer.get_sensor_reading(
-                    poison.body.position,
-                    poison.radius,
-                    poison.body.velocity,
-                    self.poison_speed,
-                )
-                poison_distances.append(poison_distance)
-                poison_velocities.append(poison_velocity)
-
-            (
-                poison_sensor_distance_vals,
-                poison_sensor_velocity_vals,
-            ) = self.get_sensor_readings(
-                poison_distances,
-                pursuer.sensor_range,
-                velocites=poison_velocities,
-            )
-
-            # When there is only one pursuer the sensors will not sense
-            # another pursuer
-            if self.n_pursuers > 1:
-                for j, _pursuer in enumerate(self.pursuers):
-                    # Get sensor readings only for other pursuers
-                    if i == j:
-                        continue
-
-                    _pursuer_distance, _pursuer_velocity = pursuer.get_sensor_reading(
-                        _pursuer.body.position,
-                        _pursuer.radius,
-                        _pursuer.body.velocity,
-                        self.pursuer_speed,
-                    )
-                    _pursuer_distances.append(_pursuer_distance)
-                    _pursuer_velocities.append(_pursuer_velocity)
-
-                (
-                    _pursuer_sensor_distance_vals,
-                    _pursuer_sensor_velocity_vals,
-                ) = self.get_sensor_readings(
-                    _pursuer_distances,
-                    pursuer.sensor_range,
-                    velocites=_pursuer_velocities,
-                )
-            else:
-                _pursuer_sensor_distance_vals = np.zeros(self.n_sensors)
-                _pursuer_sensor_velocity_vals = np.zeros(self.n_sensors)
-
-            if pursuer.shape.food_touched_indicator >= 1:
-                food_obs = 1
-            else:
-                food_obs = 0
-
-            if pursuer.shape.poison_indicator >= 1:
-                poison_obs = 1
-            else:
-                poison_obs = 0
-
             # concatenate all observations
-            if self.speed_features:
-                pursuer_observation = np.concatenate(
-                    [
-                        obstacle_sensor_vals,
-                        barrier_distances,
-                        evader_sensor_distance_vals,
-                        evader_sensor_velocity_vals,
-                        poison_sensor_distance_vals,
-                        poison_sensor_velocity_vals,
-                        _pursuer_sensor_distance_vals,
-                        _pursuer_sensor_velocity_vals,
-                        np.array([food_obs]),
-                        np.array([poison_obs]),
-                    ]
-                )
-            else:
-                pursuer_observation = np.concatenate(
-                    [
-                        obstacle_sensor_vals,
-                        barrier_distances,
-                        evader_sensor_distance_vals,
-                        poison_sensor_distance_vals,
-                        _pursuer_sensor_distance_vals,
-                        np.array([food_obs]),
-                        np.array([poison_obs]),
-                    ]
-                )
+            pursuer_observation = np.concatenate(
+                [
+                    # obstacle_sensor_vals,
+                    # barrier_distances,
+                    # evader_sensor_distance_vals,
+                    # evader_sensor_velocity_vals,
+                    # poison_sensor_distance_vals,
+                    # poison_sensor_velocity_vals,
+                    # _pursuer_sensor_distance_vals,
+                    # _pursuer_sensor_velocity_vals,
+                    # np.array([food_obs]),
+                    # np.array([poison_obs]),
+                ]
+            )
 
             observe_list.append(pursuer_observation)
 
         return observe_list
 
-    def pursuer_poison_begin_callback(self, arbiter, space, data):
-        """Called when a collision between a pursuer and a poison occurs.
+    # def pursuer_evader_begin_callback(self, arbiter, space, data):
+    #     """Called when a collision between a pursuer and an evader occurs.
 
-        The poison indicator of the pursuer becomes 1, the pursuer gets
-        a penalty for this step.
-        """
-        pursuer_shape, poison_shape = arbiter.shapes
+    #     The counter of the evader increases by 1, if the counter reaches
+    #     n_coop, then, the pursuer catches the evader and gets a reward.
+    #     """
+    #     pursuer_shape, evader_shape = arbiter.shapes
 
-        # For giving reward to pursuer
-        pursuer_shape.poison_indicator += 1
+    #     # Add one collision to evader
+    #     evader_shape.counter += 1
 
-        # Reset poision position & velocity
-        x, y = self._generate_coord(poison_shape.radius)
-        vx, vy = self._generate_speed(poison_shape.max_speed)
+    #     # Indicate that food is touched by pursuer
+    #     pursuer_shape.food_touched_indicator += 1
 
-        poison_shape.reset_position(x, y)
-        poison_shape.reset_velocity(vx, vy)
+    #     if evader_shape.counter >= self.n_coop:
+    #         # For giving reward to pursuer
+    #         pursuer_shape.food_indicator = 1
 
-        return False
+    #     return False
 
-    def pursuer_evader_begin_callback(self, arbiter, space, data):
-        """Called when a collision between a pursuer and an evader occurs.
+    # def pursuer_evader_separate_callback(self, arbiter, space, data):
+    #     """Called when a collision between a pursuer and a poison ends.
 
-        The counter of the evader increases by 1, if the counter reaches
-        n_coop, then, the pursuer catches the evader and gets a reward.
-        """
-        pursuer_shape, evader_shape = arbiter.shapes
+    #     If at this moment there are greater or equal than n_coop pursuers
+    #     that collides with this evader, the evader's position gets reset
+    #     and the pursuers involved will be rewarded.
+    #     """
+    #     pursuer_shape, evader_shape = arbiter.shapes
 
-        # Add one collision to evader
-        evader_shape.counter += 1
+    #     if evader_shape.counter < self.n_coop:
+    #         # Remove one collision from evader
+    #         evader_shape.counter -= 1
+    #     else:
+    #         evader_shape.counter = 0
 
-        # Indicate that food is touched by pursuer
-        pursuer_shape.food_touched_indicator += 1
+    #         # For giving reward to pursuer
+    #         pursuer_shape.food_indicator = 1
 
-        if evader_shape.counter >= self.n_coop:
-            # For giving reward to pursuer
-            pursuer_shape.food_indicator = 1
+    #         # Reset evader position & velocity
+    #         x, y = self._generate_coord(evader_shape.radius)
+    #         vx, vy = self._generate_speed(evader_shape.max_speed)
 
-        return False
+    #         evader_shape.reset_position(x, y)
+    #         evader_shape.reset_velocity(vx, vy)
 
-    def pursuer_evader_separate_callback(self, arbiter, space, data):
-        """Called when a collision between a pursuer and a poison ends.
-
-        If at this moment there are greater or equal than n_coop pursuers
-        that collides with this evader, the evader's position gets reset
-        and the pursuers involved will be rewarded.
-        """
-        pursuer_shape, evader_shape = arbiter.shapes
-
-        if evader_shape.counter < self.n_coop:
-            # Remove one collision from evader
-            evader_shape.counter -= 1
-        else:
-            evader_shape.counter = 0
-
-            # For giving reward to pursuer
-            pursuer_shape.food_indicator = 1
-
-            # Reset evader position & velocity
-            x, y = self._generate_coord(evader_shape.radius)
-            vx, vy = self._generate_speed(evader_shape.max_speed)
-
-            evader_shape.reset_position(x, y)
-            evader_shape.reset_velocity(vx, vy)
-
-        pursuer_shape.food_touched_indicator -= 1
-
-    def return_false_begin_callback(self, arbiter, space, data):
-        """Callback function that simply returns False."""
-        return False
+    #     pursuer_shape.food_touched_indicator -= 1
 
     def render(self):
         if self.render_mode is None:
