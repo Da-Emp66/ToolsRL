@@ -1,3 +1,10 @@
+num_handymen: 1
+max_tool_sections: 3
+max_vertices_per_tool_section: 9
+max_environment_objects: 5
+max_vertices_per_environment_object: 9
+
+
 tools:
   hammer:
     grip-point:
@@ -10,8 +17,8 @@ tools:
             red: 60
             green: 60
             blue: 60
-          weight: 20
-          friction: 0.2
+          weight: 200000000
+          friction: 0.5
           scale: 1
           layer: 1
           points:
@@ -116,8 +123,8 @@ tools:
             red: 255
             green: 60
             blue: 60
-          weight: 4
-          friction: 0.9
+          weight: 20
+          friction: 1000000000
           scale: 1
           layer: 2
           points:
@@ -180,6 +187,9 @@ tools:
             - point4:
                 x: 26
                 y: 45
+
+
+
 goals:
   open-the-chest:
     environment-objects:
@@ -202,8 +212,8 @@ goals:
       - chest-top:
           type: dynamic
           shape: polygon
-          weight: 80
-          moment: 10000000 # This needs to be very high for more stable simulations
+          weight: 5000
+          moment: 50000000 # This needs to be very high for more stable simulations
           points:
             - point1:
                 x: 0
@@ -279,6 +289,7 @@ goals:
       - wall1:
           type: static
           shape: polygon
+          friction: 0.3
           points:
             - point1:
                 x: 200
@@ -295,6 +306,7 @@ goals:
       - wall2:
           type: static
           shape: polygon
+          friction: 0.3
           points:
             - point1:
                 x: 200
@@ -312,6 +324,8 @@ goals:
           type: dynamic
           shape: polygon
           moment: 10000000000 # This needs to be very high for more stable simulations
+          weight: 100
+          friction: 0.5
           points:
             - point1:
                 x: 0

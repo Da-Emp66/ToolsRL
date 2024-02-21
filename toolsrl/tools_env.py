@@ -33,10 +33,11 @@ class ToolsBaseEnvironment:
         self.handlers = []
 
         self.tools = None
+        self.goals = None
         self.render_mode = render_mode
         self.screen = None
         self.frames = 0
-        self.num_agents = 1
+        self.num_handymen = 1
 
     def __post_init__(self):
         with open(self.configuration_file) as cfg:
@@ -50,32 +51,34 @@ class ToolsBaseEnvironment:
         self._seed()
 
     def get_spaces(self):
-        """Define the action and observation spaces for all of the agents."""
+        """Define the action and observation spaces for all of the agents.
 
         ############# OBSERVATION SPACE
-        ###### Tool
+        ######## Tool
+        # - orientation (left [0], right [1])
         # - position x, y
         # - angle, angular velocity
-        #### For every ToolSection
-        #  - section type (ball [0], polygon [1], etc.)
+        ###### For current Tool
+        #### For every ToolSection (with a hard cap at n possible sections)
         ### Properties:
         #  - weight
         #  - friction
         #  - moment
-        ### Positions:
-        #  - initial points x, y of tool section OR radius if section type is ball
-        ###### Goal
-        #### For every EnvironmentObject
+        ### Shapes:
+        #  - initial points x, y of tool section (with a hard cap at n possible points)
+        ######## Goal
+        #### For every EnvironmentObject (with a hard cap at n possible objects)
+        ### Shapes:
         #  - body type (static [0], dynamic [1])
         #  - section type (ball [0], polygon [1], etc.)
-        #  - initial points x, y of environment object OR radius if section type is ball
+        #  - initial points x, y of environment object (with a hard cap at n possible points) OR radius if section type is ball
         ### Properties:
         #  - weight
         #  - friction
         #  - moment
         ### Positions:
         #  - angle, angular velocity
-        #  - position (x, y), velocity
+        #  - position (x, y), velocity (vx, vy)
         #  - GOAL FLAG
         #  - GOAL POSITION x, y to touch
 
@@ -83,7 +86,11 @@ class ToolsBaseEnvironment:
         # - position x, y of tool
         # - orientation (left [0], right [1])
 
-        obs_dim = 0
+        """
+
+        obs_for_tool = self.max_tool_sections * (3 + 2 * self.max_vertices_per_tool_section)
+        obs_for_environment = self.max_environment_objects * (2 + 2 * self.max_vertices_per_environment_object + 3 + 9)
+        obs_dim = 5 + obs_for_tool + obs_for_environment
 
         obs_space = spaces.Box(
             low=np.float32(-np.sqrt(2)),
@@ -95,12 +102,14 @@ class ToolsBaseEnvironment:
         act_space = spaces.Box(
             low=np.float32(-1.0),
             high=np.float32(1.0),
-            shape=(2,),
+            shape=(3,),
             dtype=np.float32,
         )
 
-        self.observation_space = [obs_space for i in range(self.n_pursuers)]
-        self.action_space = [act_space for i in range(self.n_pursuers)]
+        # Make a copy of the observation space and action space for each agent
+        # to see and use, respectively
+        self.observation_space = [obs_space for _ in range(self.num_handymen)]
+        self.action_space = [act_space for _ in range(self.num_handymen)]
 
     def _seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)

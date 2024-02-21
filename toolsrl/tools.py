@@ -129,13 +129,13 @@ class Tool:
 
     def __init__(self, space: pymunk.Space, description: Dict[str, Any], initial_point: Tuple[int, int] = (0, 0), coordinate_conversion_fn: Optional[Any] = lambda x: x):
         self.space = space
-        self.body = pymunk.Body(10, 100000)
+        self.body = pymunk.Body(1, 10000)
         self.coordinate_conversion_fn = coordinate_conversion_fn
         self.created = False
         self.load_from_dict(description)
         self.create()
 
-        self.grip = pymunk.Body(10, 100000, pymunk.Body.STATIC)
+        self.grip = pymunk.Body(1, 10000, pymunk.Body.STATIC)
         self.rotation_joint = PivotJoint(self.grip, self.body, initial_point, (self.grip_point['x'] * self.scale, self.grip_point['y'] * self.scale))
         self.space.add(self.grip, self.rotation_joint)
 
