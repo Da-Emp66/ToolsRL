@@ -16,6 +16,7 @@ EXPECTED_GOAL_PROPERTIES = {
 EXPECTED_ENVIRONMENT_OBJECT_PROPERTIES = {
     "color": {"red":0,"green":0,"blue":0},
     "friction": None,
+    "moment": 0,
     "points": [],
     "radius": 10.0,
     "scale": 1.0,
@@ -32,7 +33,7 @@ class EnvironmentObject:
         elif self.type == "dynamic":
             body_type = pymunk.Body.DYNAMIC
 
-        self.body = pymunk.Body(self.weight, 10000000000, body_type)
+        self.body = pymunk.Body(self.weight, self.moment, body_type)
         self.space.add(self.body)
 
         if self.shape == "polygon":
@@ -40,7 +41,6 @@ class EnvironmentObject:
         elif self.shape == "circle":
             self.shapes = [pymunk.Circle(self.body, self.radius)]
             
-
         if self.friction is not None:
             for idx, _ in enumerate(self.shapes):
                 self.shapes[idx].friction = self.friction
@@ -113,8 +113,13 @@ class Goal:
                 hinge_objects = [environment_object for environment_object in hinge_details]
                 hinge_object_names = [next(iter(environment_object)) for environment_object in hinge_objects]
                 hinge_points = [hinge_object[hinge_object_name]['point'] for hinge_object, hinge_object_name in zip(hinge_objects, hinge_object_names)]
-                assert len(hinge_object_names) == len(hinge_points) == 2, "Each hinge can only have 2 objects and 2 points (1 per object). No more, no less <(*_,*)>"
-                all_hinges.append((hinge_object_names, hinge_points))
+                hinge_object_types = []
+                for hinge_object_name in hinge_object_names:
+                    for environment_object in self.environment_objects:
+                        if environment_object.name == hinge_object_name:
+                            hinge_object_types.append(environment_object.type)
+                assert len(hinge_object_names) == len(hinge_points) == len(hinge_object_types) == 2, "Each hinge can only have 2 objects and 2 points (1 per object). No more, no less <(*_,*)> Both objects must also already exist in the goal and have either `static` or `dynamic` type."
+                all_hinges.append((hinge_object_names, hinge_object_types, hinge_points))
 
             def get_body(self, environment_object_name: str):
                 for environment_object in self.environment_objects:
@@ -122,12 +127,11 @@ class Goal:
                         return environment_object.body
                 return None
             
-            # TODO: Variably adjust coordinates if the body is dynamic
             self.hinge_shapes = [
                 PinJoint(
                     *[get_body(self, hinge_object_name) for hinge_object_name in hinge_object_names],
-                    *list(map(lambda point: (self.initial_point[0] - point['x'], self.initial_point[1] - point['y']), hinge_points))
-                ) for hinge_object_names, hinge_points in all_hinges
+                    *list(map(lambda hinge_object_type, point: (self.initial_point[0] - point['x'], self.initial_point[1] - point['y']) if hinge_object_type == "static" else (-point['x'], -point['y']), hinge_object_types, hinge_points))
+                ) for hinge_object_names, hinge_object_types, hinge_points in all_hinges
             ]
 
             self.space.add(*self.hinge_shapes)
@@ -180,5 +184,5 @@ class Goal:
         
         return False
     
-    def get_reward(self) -> float:
-        pass
+    def get_environment_state(self):
+        self.environment_objects

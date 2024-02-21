@@ -1,7 +1,7 @@
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List, Tuple, Literal
 
+import itertools
 import yaml
-import pygame
 import pymunk
 from pymunk.constraints import PivotJoint
 
@@ -56,9 +56,6 @@ class ToolSection:
         self.line_width = 7.0 # TODO: Make this configurable
         self.load_from_dict(description)
     
-    # def draw(self, display: pygame.Surface, convert_coordinates: Any) -> pygame.Rect:
-    #     return pygame.draw.polygon(display, pygame.Color(self.color['red'], self.color['green'], self.color['blue']), list(map(lambda point: convert_coordinates(point), self.points)), width=int(self.line_width))
-    
     def _scale(self, factor: int | float) -> 'ToolSection':
         self.points = [(int(point[0] * factor), int(point[1] * factor)) for point in self.points]
         self._update_edges()
@@ -89,9 +86,15 @@ class ToolSection:
 
 class Tool:
     def create(self):
-        self.space.add(self.body)
+        if not self.created:
+            self.space.add(self.body)
+            self.created = True
         self.sections.sort()
         self.shapes = [section.create() for section in self.sections[::-1]]
+        return self
+    
+    def destroy(self):
+        self.space.remove(*list(itertools.chain(*[shapes.shapes for shapes in self.shapes])))
         return self
 
     def load_from_dict(self, description: Dict[str, Any]):
@@ -126,22 +129,31 @@ class Tool:
 
     def __init__(self, space: pymunk.Space, description: Dict[str, Any], initial_point: Tuple[int, int] = (0, 0), coordinate_conversion_fn: Optional[Any] = lambda x: x):
         self.space = space
-        self.body = pymunk.Body(10, 98)
+        self.body = pymunk.Body(10, 100000)
         self.coordinate_conversion_fn = coordinate_conversion_fn
+        self.created = False
         self.load_from_dict(description)
         self.create()
 
-        self.grip = pymunk.Body(10, 98, pymunk.Body.STATIC)
+        self.grip = pymunk.Body(10, 100000, pymunk.Body.STATIC)
         self.rotation_joint = PivotJoint(self.grip, self.body, initial_point, (self.grip_point['x'] * self.scale, self.grip_point['y'] * self.scale))
         self.space.add(self.grip, self.rotation_joint)
 
-    # def draw(self, display: pygame.Surface, convert_coordinates: Any) -> List[pygame.Rect]:
-    #     self.sections.sort()
-    #     return [section.draw(display, convert_coordinates) for section in self.sections[::-1]]
-    
     def reset_position(self, x, y):
         self.grip.position = x, y
 
     def reset_velocity(self, vx, vy):
         self.body.velocity = vx, vy
 
+    def flip_orientation(self, axis: Literal['x', 'y']):
+        self.destroy()
+        axis = {'x': 0, 'y': 1}[axis]
+        for idx, _ in enumerate(self.sections):
+            for idx2, _ in enumerate(self.sections[idx].points):
+                if axis == 0:
+                    self.sections[idx].points[idx2] = (-1 * self.sections[idx].points[idx2][0], self.sections[idx].points[idx2][1])
+                elif axis == 1:
+                    self.sections[idx].points[idx2] = (self.sections[idx].points[idx2][0], -1 * self.sections[idx].points[idx2][1])
+                self.sections[idx]._update_edges()
+        # TODO: Remove the self.grip body and self.rotation_joint, multiply self.grip by -1, and recreate both
+        self.create()

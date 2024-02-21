@@ -51,10 +51,39 @@ class ToolsBaseEnvironment:
 
     def get_spaces(self):
         """Define the action and observation spaces for all of the agents."""
-        if self.speed_features:
-            obs_dim = 8 * self.n_sensors + 2
-        else:
-            obs_dim = 5 * self.n_sensors + 2
+
+        ############# OBSERVATION SPACE
+        ###### Tool
+        # - position x, y
+        # - angle, angular velocity
+        #### For every ToolSection
+        #  - section type (ball [0], polygon [1], etc.)
+        ### Properties:
+        #  - weight
+        #  - friction
+        #  - moment
+        ### Positions:
+        #  - initial points x, y of tool section OR radius if section type is ball
+        ###### Goal
+        #### For every EnvironmentObject
+        #  - body type (static [0], dynamic [1])
+        #  - section type (ball [0], polygon [1], etc.)
+        #  - initial points x, y of environment object OR radius if section type is ball
+        ### Properties:
+        #  - weight
+        #  - friction
+        #  - moment
+        ### Positions:
+        #  - angle, angular velocity
+        #  - position (x, y), velocity
+        #  - GOAL FLAG
+        #  - GOAL POSITION x, y to touch
+
+        ############# ACTION SPACE
+        # - position x, y of tool
+        # - orientation (left [0], right [1])
+
+        obs_dim = 0
 
         obs_space = spaces.Box(
             low=np.float32(-np.sqrt(2)),
@@ -189,12 +218,6 @@ class ToolsBaseEnvironment:
 
         return coord
 
-    def _generate_speed(self, speed):
-        """Generates random speed (vx, vy) with vx, vy ∈ [-speed, speed]."""
-        _speed = (self.np_random.random(2) - 0.5) * 2 * speed
-
-        return _speed[0], _speed[1]
-
     def add(self):
         """Add all moving objects to PyMunk space."""
         self.space = pymunk.Space()
@@ -234,12 +257,6 @@ class ToolsBaseEnvironment:
             )
             self.barriers[-1].elasticity = 0.999
             self.space.add(self.barriers[-1])
-
-    def draw(self):
-        """Draw all moving objects and obstacles in PyGame."""
-        for obj_list in [self.pursuers, self.evaders, self.poisons, self.obstacles]:
-            for obj in obj_list:
-                obj.draw(self.screen, self.convert_coordinates)
 
     def add_handlers(self):
         # Collision handlers for pursuers v.s. evaders & poisons
@@ -549,30 +566,6 @@ class ToolsBaseEnvironment:
             observe_list.append(pursuer_observation)
 
         return observe_list
-
-    def get_sensor_readings(self, positions, sensor_range, velocites=None):
-        """Get readings from sensors.
-
-        positions: position readings for all objects by all sensors
-        velocites: velocity readings for all objects by all sensors
-        """
-        distance_vals = np.concatenate(positions, axis=1)
-
-        # Sensor only reads the closest object
-        min_idx = np.argmin(distance_vals, axis=1)
-
-        # Normalize sensor readings
-        sensor_distance_vals = np.amin(distance_vals, axis=1)
-
-        if velocites is not None:
-            velocity_vals = np.concatenate(velocites, axis=1)
-
-            # Get the velocity reading of the closest object
-            sensor_velocity_vals = velocity_vals[np.arange(self.n_sensors), min_idx]
-
-            return sensor_distance_vals, sensor_velocity_vals
-
-        return sensor_distance_vals
 
     def pursuer_poison_begin_callback(self, arbiter, space, data):
         """Called when a collision between a pursuer and a poison occurs.

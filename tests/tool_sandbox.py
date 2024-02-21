@@ -1,6 +1,7 @@
 from typing import List
 
 import argparse
+import numpy as np
 import sys
 import yaml
 import pygame
@@ -92,10 +93,15 @@ def main(args):
                 dragging = True
             elif event.type == pygame.MOUSEBUTTONUP:
                 dragging = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:
+                    tool.flip_orientation('x')
 
         if dragging:
             pos = pygame.mouse.get_pos()
-            print(pos)
+            print(tool.body.angular_velocity)
+            print(tool.body.angle % (2 * np.pi))
+            # print([[shape.a for shape in created_section.shapes] for created_section in tool.shapes])
             tool.reset_position(pos[0] - initial_tool_pos[0], pos[1] - initial_tool_pos[1])
 
         screen.fill((255,255,255))

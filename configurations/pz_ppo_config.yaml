@@ -203,6 +203,7 @@ goals:
           type: dynamic
           shape: polygon
           weight: 80
+          moment: 10000000 # This needs to be very high for more stable simulations
           points:
             - point1:
                 x: 0
@@ -267,6 +268,7 @@ goals:
           shape: circle
           radius: 24.0
           weight: 80
+          moment: 10000000 # This needs to be very high for more stable simulations
     accomplishment-criteria:
       object: ball
       touches:
@@ -309,6 +311,7 @@ goals:
       - nail:
           type: dynamic
           shape: polygon
+          moment: 10000000000 # This needs to be very high for more stable simulations
           points:
             - point1:
                 x: 0
