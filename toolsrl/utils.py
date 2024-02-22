@@ -1,9 +1,24 @@
-from typing import List
+from typing import List, Dict, Any
+import re
 import pymunk
 
 WINDOW_SIZE_X = 1200
 WINDOW_SIZE_Y = 900
 BARRIER_WIDTH = 1000
+
+def get_initial_positions(description: Dict[str, Any], goal: str):
+    offsets = description['offsets'][goal]
+    positions = [offsets['initial_tool_position'], offsets['initial_goal_position']]
+    for idx, initial_pos in enumerate(positions):
+        potential_position = str(initial_pos).replace("WINDOW_SIZE_X", str(WINDOW_SIZE_X)).replace("WINDOW_SIZE_Y", str(WINDOW_SIZE_Y))
+        if re.match("^([\d\%\*\/\+\-\(\),]*)*$", potential_position) and 0 < len(potential_position) < 1000:
+            positions[idx] = eval(potential_position)
+        else:
+            raise ValueError("""Configuration file contains potentially dangerous initial positions.
+                               Remove all characters other than parentheses, digits, and basic mathematical operators.
+                               The type should be a tuple.""")
+    initial_tool_pos, initial_goal_pos = positions
+    return (initial_tool_pos, initial_goal_pos)
 
 """Helper functions from WaterWorld"""
 

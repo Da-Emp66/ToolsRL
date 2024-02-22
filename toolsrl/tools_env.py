@@ -8,6 +8,7 @@ Author: Asher B. Gibson
 
 from typing import Optional, Literal
 
+import math
 import pymunk
 import gymnasium
 import numpy as np
@@ -15,6 +16,8 @@ from gymnasium import spaces
 from gymnasium.utils import seeding
 import pygame
 import yaml
+from toolsrl.utils import get_initial_positions, add_bounding_box, WINDOW_SIZE_X, WINDOW_SIZE_Y
+from toolsrl.tools import HandyMan, Tool
 
 DEFAULT_CONFIG = "./configurations/tools_env_config.yaml"
 FPS = 15
@@ -26,26 +29,36 @@ class ToolsBaseEnvironment:
             render_mode: Optional[Literal["human"]] = None,
         ):
         self.configuration_file = configuration_filename
-        self.pixel_scale = 30 * 25
+        self.environment_name = "ToolsRL_v1"
+        self.window_size = (WINDOW_SIZE_X, WINDOW_SIZE_Y)
         self.clock = pygame.time.Clock()
-        self.FPS = FPS
-
+        self.space = pymunk.Space()
+        self.fps = FPS
         self.handlers = []
-
         self.tools = None
         self.goals = None
         self.render_mode = render_mode
         self.screen = None
         self.frames = 0
         self.num_handymen = 1
+        self.handymen = [HandyMan() for _ in range(self.num_handymen)]
+        self.max_acceleration = 1.0
 
     def __post_init__(self):
         with open(self.configuration_file) as cfg:
-            overrides = yaml.safe_load(cfg)
+            self.description = yaml.safe_load(cfg)
             cfg.close()
-        for key in overrides:
+        for key in self.description:
             if not self.__dict__.get(key, True):
-                self.__setattr__(key, overrides.get(key))
+                self.__setattr__(key, self.description.get(key))
+
+        self.tool_names = [key for key in self.tools]
+        self.num_available_tools = len(self.tool_names)
+        self.goal_names = [key for key in self.goals]
+        self.num_available_goals = len(self.goal_names)
+        self.choose_random_goal()
+
+        self.initial_tool_position, self.initial_goal_position = get_initial_positions(self.description, ) 
 
         self.get_spaces()
         self._seed()
@@ -83,7 +96,7 @@ class ToolsBaseEnvironment:
         #  - GOAL POSITION x, y to touch
 
         ############# ACTION SPACE
-        # - position x, y of tool
+        # - velocity vx, vy of tool
         # - orientation (left [0], right [1])
 
         """
@@ -93,8 +106,8 @@ class ToolsBaseEnvironment:
         obs_dim = 5 + obs_for_tool + obs_for_environment
 
         observation_space = spaces.Box(
-            low=np.float32(-np.sqrt(2)),
-            high=np.float32(np.sqrt(2)),
+            low=np.float32(-1.0),
+            high=np.float32(1.0),
             shape=(obs_dim,),
             dtype=np.float32,
         )
@@ -114,22 +127,17 @@ class ToolsBaseEnvironment:
     def _seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
-
-    def add_obj(self):
+    
+    def choose_random_goal(self):
         pass
 
-    def close(self):
-        if self.screen is not None:
-            pygame.quit()
-            self.screen = None
-
-    def add(self):
+    def create(self):
         """Add all moving objects to PyMunk space."""
-        self.space = pymunk.Space()
 
-        for obj_list in [self.pursuers, self.evaders, self.poisons, self.obstacles]:
-            for obj in obj_list:
-                obj.add(self.space)
+        for handyman in self.handymen:
+            tool_name = self.tool_names[int(np.random.random() * self.num_available_tools)]
+            handyman.current_tool = Tool(self.space, {tool_name: self.tools[tool_name]}, self.initial_tool_position)
+            
 
     def add_handlers(self):
         pass
@@ -202,7 +210,7 @@ class ToolsBaseEnvironment:
         self.frames = 0
 
         # Add objects to space
-        self.add_bounding_box()
+        add_bounding_box(self.space)
         self.add()
         self.add_handlers()
 
@@ -217,25 +225,25 @@ class ToolsBaseEnvironment:
 
         return obs_list[0]
 
-    def step(self, action, agent_id, is_last):
-        action = np.asarray(action) * self.pursuer_max_accel
+    def step(self, action, agent_idx, is_last):
+        action = np.asarray(action) * self.max_acceleration
         action = action.reshape(2)
         thrust = np.linalg.norm(action)
-        if thrust > self.pursuer_max_accel:
+        if thrust > self.max_acceleration:
             # Limit added thrust to self.pursuer_max_accel
-            action = action * (self.pursuer_max_accel / thrust)
+            action = action * (self.max_acceleration / thrust)
 
-        p = self.pursuers[agent_id]
+        handyman = self.handymen[agent_idx]
 
         # Clip pursuer speed
         _velocity = np.clip(
-            p.body.velocity + action * self.pixel_scale,
+            handyman.current_tool.body.velocity + action * self.pixel_scale,
             -self.pursuer_speed,
             self.pursuer_speed,
         )
 
         # Set pursuer speed
-        p.reset_velocity(_velocity[0], _velocity[1])
+        handyman.accelerate(_velocity[0], _velocity[1])
 
         # Penalize large thrusts
         accel_penalty = self.thrust_penalty * math.sqrt((action**2).sum())
@@ -248,19 +256,19 @@ class ToolsBaseEnvironment:
         )
 
         # Assign the current agent the local portion designated by local_ratio
-        self.control_rewards[agent_id] += accel_penalty * self.local_ratio
+        self.control_rewards[agent_idx] += accel_penalty * self.local_ratio
 
         if is_last:
-            self.space.step(1 / self.FPS)
+            self.space.step(1 / self.fps)
 
             obs_list = self.observe_list()
             self.last_obs = obs_list
 
             for idx in range(self.num_handymen):
-                p = self.pursuers[id]
+                p = self.handymen[idx]
 
                 # reward for food caught, encountered and poison
-                self.behavior_rewards[id] = (
+                self.behavior_rewards[idx] = (
                     self.food_reward * p.shape.food_indicator
                     + self.encounter_reward * p.shape.food_touched_indicator
                     + self.poison_reward * p.shape.poison_indicator
@@ -281,28 +289,27 @@ class ToolsBaseEnvironment:
 
             self.frames += 1
 
-        return self.observe(agent_id)
+        return self.observe(agent_idx)
 
     def observe(self, agent_id):
         return np.array(self.last_obs[agent_id], dtype=np.float32)
 
     def observe_list(self):
-        observe_list = []
+        for idx, handyman in enumerate(self.handymen):
+            
+            handyman.current_tool.orientation
+            handyman.current_tool.body.position
+            handyman.current_tool.body.angle % (2 * np.pi)
+            handyman.current_tool.body.angular_velocity
 
-        for i, pursuer in enumerate(self.pursuers):
-            obstacle_distances = []
+            sections = [[(-1.0, -1.0) for _ in range(self.max_vertices_per_tool_section)] for _ in range (self.max_tool_sections)]
+            for i in enumerate(handyman.current_tool.sections):
+                for j, point in enumerate(handyman.current_tool.sections[i]):
+                    sections[i][j] = (point[0] / self.window_size[0], point[1] / self.window_size[1])
 
-            evader_distances = []
-            evader_velocities = []
-
-            poison_distances = []
-            poison_velocities = []
-
-            _pursuer_distances = []
-            _pursuer_velocities = []
 
             # concatenate all observations
-            pursuer_observation = np.concatenate(
+            handyman_observation = np.concatenate(
                 [
                     # obstacle_sensor_vals,
                     # barrier_distances,
@@ -317,9 +324,7 @@ class ToolsBaseEnvironment:
                 ]
             )
 
-            observe_list.append(pursuer_observation)
-
-        return observe_list
+        return [handyman_observation]
 
     # def pursuer_evader_begin_callback(self, arbiter, space, data):
     #     """Called when a collision between a pursuer and an evader occurs.
@@ -370,24 +375,20 @@ class ToolsBaseEnvironment:
 
     def render(self):
         if self.render_mode is None:
-            gymnasium.logger.warn(
-                "You are calling render method without specifying any render mode."
-            )
+            gymnasium.logger.warn("You are calling render method without specifying any render mode.")
             return
 
         if self.screen is None:
             if self.render_mode == "human":
                 pygame.init()
-                self.screen = pygame.display.set_mode(
-                    (self.pixel_scale, self.pixel_scale)
-                )
-                pygame.display.set_caption("Waterworld")
+                self.screen = pygame.display.set_mode((self.window_size[0], self.window_size[1]))
+                pygame.display.set_caption(self.environment_name)
             else:
-                self.screen = pygame.Surface((self.pixel_scale, self.pixel_scale))
+                self.screen = pygame.Surface((self.window_size[0], self.window_size[1]))
 
         self.screen.fill((255, 255, 255))
         self.draw()
-        self.clock.tick(self.FPS)
+        self.clock.tick(self.fps)
 
         observation = pygame.surfarray.pixels3d(self.screen)
         new_observation = np.copy(observation)
@@ -401,3 +402,8 @@ class ToolsBaseEnvironment:
             if self.render_mode == "rgb_array"
             else None
         )
+
+    def close(self):
+        if self.screen is not None:
+            pygame.quit()
+            self.screen = None

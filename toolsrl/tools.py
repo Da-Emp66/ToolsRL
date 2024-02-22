@@ -135,6 +135,7 @@ class Tool:
         self.load_from_dict(description)
         self.create()
 
+        self.orientation = 0
         self.grip = pymunk.Body(1, 10000, pymunk.Body.STATIC)
         self.rotation_joint = PivotJoint(self.grip, self.body, initial_point, (self.grip_point['x'] * self.scale, self.grip_point['y'] * self.scale))
         self.space.add(self.grip, self.rotation_joint)
@@ -146,6 +147,7 @@ class Tool:
         self.body.velocity = vx, vy
 
     def flip_orientation(self, axis: Literal['x', 'y']):
+        self.orientation ^= 1
         self.destroy()
         axis = {'x': 0, 'y': 1}[axis]
         for idx, _ in enumerate(self.sections):
@@ -157,3 +159,22 @@ class Tool:
                 self.sections[idx]._update_edges()
         # TODO: Remove the self.grip body and self.rotation_joint, multiply self.grip by -1, and recreate both
         self.create()
+
+    def reset(self, position: Optional[Tuple[int, int]] = None):
+        self.destroy()
+        if position is not None:
+            self.reset_position(*position)
+        self.create()
+
+
+class HandyMan:
+    def __init__(self, tool: Tool):
+        self.observation_space = None
+        self.action_space = None
+        self.current_tool = tool
+
+    def move(self, x, y):
+        self.current_tool.reset_position(x, y)
+        
+    def accelerate(self, vx, vy):
+        self.current_tool.reset_velocity(vx, vy)

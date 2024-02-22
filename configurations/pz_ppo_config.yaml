@@ -3,6 +3,8 @@ max_tool_sections: 3
 max_vertices_per_tool_section: 9
 max_environment_objects: 5
 max_vertices_per_environment_object: 9
+max_acceleration: 1.0
+
 
 
 tools:
@@ -353,3 +355,16 @@ goals:
       touches:
         x: 
         y: 
+
+
+
+offsets:
+  open-the-chest:
+    initial_tool_position: (WINDOW_SIZE_X/2,WINDOW_SIZE_Y/2)
+    initial_goal_position: (2*WINDOW_SIZE_X/3,WINDOW_SIZE_Y)
+  kick-the-ball:
+    initial_tool_position: (7*WINDOW_SIZE_X/8,3*WINDOW_SIZE_Y/8)
+    initial_goal_position: (WINDOW_SIZE_X,WINDOW_SIZE_Y)
+  hit-the-nail:
+    initial_tool_position: (7*WINDOW_SIZE_X/8,7*WINDOW_SIZE_Y/8)
+    initial_goal_position: (2*WINDOW_SIZE_X/3,WINDOW_SIZE_Y)

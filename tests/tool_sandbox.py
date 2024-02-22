@@ -1,5 +1,6 @@
 from typing import List
 
+import re
 import argparse
 import numpy as np
 import sys
@@ -9,7 +10,10 @@ import pymunk
 import pymunk.pygame_util
 from toolsrl.tools import Tool
 from toolsrl.goals import Goal
-from toolsrl.utils import convert_coordinates, add_bounding_box, WINDOW_SIZE_X, WINDOW_SIZE_Y
+from toolsrl.utils import (
+    get_initial_positions, convert_coordinates, add_bounding_box,
+    WINDOW_SIZE_X, WINDOW_SIZE_Y
+)
 
 FPS = 100.0
 
@@ -23,27 +27,16 @@ def main(args):
     initial_tool_pos = None
     initial_goal_pos = None # In PyGame Coordinates
 
-    if args.goal == "open-the-chest":
-        initial_tool_pos = (WINDOW_SIZE_X/2, WINDOW_SIZE_Y/2)
-        initial_goal_pos = (2*WINDOW_SIZE_X/3, WINDOW_SIZE_Y)
-    elif args.goal == "kick-the-ball":
-        initial_tool_pos = (7*WINDOW_SIZE_X/8, 3*WINDOW_SIZE_Y/8)
-        initial_goal_pos = (WINDOW_SIZE_X, WINDOW_SIZE_Y)
-    elif args.goal == "hit-the-nail":
-        initial_tool_pos = (7*WINDOW_SIZE_X/8, 7*WINDOW_SIZE_Y/8)
-        initial_goal_pos = (2*WINDOW_SIZE_X/3, WINDOW_SIZE_Y)
-
     draw_options = pymunk.pygame_util.DrawOptions(screen)
 
     tool = None
     with open(args.configuration) as toolfile:
         description = yaml.safe_load(toolfile)
+        initial_tool_pos, initial_goal_pos = get_initial_positions(description, args.goal)
         tool = Tool(space, {args.tool: description['tools'][args.tool]}, initial_tool_pos, convert_coordinates)
         goal = Goal(space, {args.goal: description['goals'][args.goal]}, initial_goal_pos, convert_coordinates)
         toolfile.close()
-
     add_bounding_box(space)
-
     dragging = False
 
     while True:
@@ -62,8 +55,8 @@ def main(args):
 
         if dragging:
             pos = pygame.mouse.get_pos()
-            print(tool.body.angular_velocity)
-            print(tool.body.angle % (2 * np.pi))
+            # print(tool.body.angular_velocity)
+            # print(tool.body.angle % (2 * np.pi))
             # print([[shape.a for shape in created_section.shapes] for created_section in tool.shapes])
             tool.reset_position(pos[0] - initial_tool_pos[0], pos[1] - initial_tool_pos[1])
 
