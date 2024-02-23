@@ -16,7 +16,8 @@ from gymnasium import spaces
 from gymnasium.utils import seeding
 import pygame
 import yaml
-from toolsrl.utils import get_initial_positions, add_bounding_box, WINDOW_SIZE_X, WINDOW_SIZE_Y
+from toolsrl.goals import Goal
+from toolsrl.utils import convert_coordinates, get_initial_positions, add_bounding_box, WINDOW_SIZE_X, WINDOW_SIZE_Y
 from toolsrl.tools import HandyMan, Tool
 
 DEFAULT_CONFIG = "./configurations/tools_env_config.yaml"
@@ -57,9 +58,7 @@ class ToolsBaseEnvironment:
         self.goal_names = [key for key in self.goals]
         self.num_available_goals = len(self.goal_names)
         self.choose_random_goal()
-
-        self.initial_tool_position, self.initial_goal_position = get_initial_positions(self.description, ) 
-
+        self.initial_tool_position, self.initial_goal_position = get_initial_positions(self.description, self.goal) 
         self.get_spaces()
         self._seed()
 
@@ -81,14 +80,14 @@ class ToolsBaseEnvironment:
         #  - initial points x, y of tool section (with a hard cap at n possible points)
         ######## Goal
         #### For every EnvironmentObject (with a hard cap at n possible objects)
-        ### Shapes:
-        #  - body type (static [0], dynamic [1])
-        #  - section type (ball [0], polygon [1], etc.)
-        #  - initial points x, y of environment object (with a hard cap at n possible points) OR radius if section type is ball
         ### Properties:
         #  - weight
         #  - friction
         #  - moment
+        ### Shapes:
+        #  - body type (static [0], dynamic [1])
+        #  - section type (ball [0], polygon [1], etc.)
+        #  - initial points x, y of environment object (with a hard cap at n possible points) OR radius if section type is ball
         ### Positions:
         #  - angle, angular velocity
         #  - position (x, y), velocity (vx, vy)
@@ -129,7 +128,8 @@ class ToolsBaseEnvironment:
         return [seed]
     
     def choose_random_goal(self):
-        pass
+        selected = np.random.choice(self.description['goals'].keys())
+        self.goal = Goal(self.space, {selected: self.description['goals'][selected]}, self.initial_goal_pos, convert_coordinates)
 
     def create(self):
         """Add all moving objects to PyMunk space."""
@@ -295,36 +295,52 @@ class ToolsBaseEnvironment:
         return np.array(self.last_obs[agent_id], dtype=np.float32)
 
     def observe_list(self):
-        for idx, handyman in enumerate(self.handymen):
-            
-            handyman.current_tool.orientation
-            handyman.current_tool.body.position
-            handyman.current_tool.body.angle % (2 * np.pi)
-            handyman.current_tool.body.angular_velocity
+        # Grab observations regarding goal and environment
+        environment_object_properties = [[0.0, 0.0, 0.0, 0.0, 0.0] for _ in range (self.max_environment_objects)]
+        environment_object_points = [[(-1.0, -1.0) for _ in range(self.max_vertices_per_environment_object)] for _ in range (self.max_environment_objects)]
+        for i, environment_object in enumerate(self.goal.environment_objects):
+            environment_object_properties[i] = [
+                environment_object.weight,
+                environment_object.friction,
+                environment_object.moment,
+                environment_object.type,
+                environment_object.shape
+            ]
+            for j, point in enumerate(environment_object.points):
+                environment_object_points[i][j] = (point[0] / self.window_size[0], point[1] / self.window_size[1])
+        environment_observations = np.array(list(zip(environment_object_properties, environment_object_points))).flatten()
 
-            sections = [[(-1.0, -1.0) for _ in range(self.max_vertices_per_tool_section)] for _ in range (self.max_tool_sections)]
-            for i in enumerate(handyman.current_tool.sections):
-                for j, point in enumerate(handyman.current_tool.sections[i]):
-                    sections[i][j] = (point[0] / self.window_size[0], point[1] / self.window_size[1])
+        # Grab observations per handyman
+        handyman_observations = []
+        for _, handyman in enumerate(self.handymen):
+            # Grab observations regarding tool sections
+            section_properties = [[0.0, 0.0, 0.0] for _ in range (self.max_tool_sections)]
+            section_points = [[(-1.0, -1.0) for _ in range(self.max_vertices_per_tool_section)] for _ in range (self.max_tool_sections)]
+            for i, _ in enumerate(handyman.current_tool.sections):
+                section_properties[i] = [
+                    handyman.current_tool.sections[i].weight,
+                    handyman.current_tool.sections[i].friction,
+                    handyman.current_tool.sections[i].moment
+                ]
+                for j, point in enumerate(handyman.current_tool.sections[i].points):
+                    section_points[i][j] = (point[0] / self.window_size[0], point[1] / self.window_size[1])
+            tool_observations = np.array(list(zip(section_properties, section_points))).flatten()
 
-
-            # concatenate all observations
+            # Concatenate all observations
             handyman_observation = np.concatenate(
                 [
-                    # obstacle_sensor_vals,
-                    # barrier_distances,
-                    # evader_sensor_distance_vals,
-                    # evader_sensor_velocity_vals,
-                    # poison_sensor_distance_vals,
-                    # poison_sensor_velocity_vals,
-                    # _pursuer_sensor_distance_vals,
-                    # _pursuer_sensor_velocity_vals,
-                    # np.array([food_obs]),
-                    # np.array([poison_obs]),
+                    handyman.current_tool.orientation,
+                    handyman.current_tool.body.position,
+                    handyman.current_tool.body.angle % (2 * np.pi),
+                    handyman.current_tool.body.angular_velocity,
+                    tool_observations,
+                    environment_observations
                 ]
             )
 
-        return [handyman_observation]
+            handyman_observations.append(handyman_observation)
+
+        return handyman_observations
 
     # def pursuer_evader_begin_callback(self, arbiter, space, data):
     #     """Called when a collision between a pursuer and an evader occurs.
