@@ -134,85 +134,34 @@ class ToolsBaseEnvironment:
 
     def create(self):
         """Add all moving objects to PyMunk space."""
-
-        for handyman in self.handymen:
+        for idx, _ in enumerate(self.handymen):
             tool_name = self.tool_names[int(np.random.random() * self.num_available_tools)]
-            handyman.current_tool = Tool(self.space, {tool_name: self.tools[tool_name]}, self.initial_tool_position)
-            
+            self.handymen[idx].current_tool = Tool(self.space, {tool_name: self.tools[tool_name]}, self.initial_tool_position)
+        self.goal.create()
 
     def add_handlers(self):
-        pass
-        # # Collision handlers for pursuers v.s. evaders & poisons
-        # for pursuer in self.pursuers:
-        #     for obj in self.evaders:
-        #         self.handlers.append(
-        #             self.space.add_collision_handler(
-        #                 pursuer.shape.collision_type, obj.shape.collision_type
-        #             )
-        #         )
-        #         self.handlers[-1].begin = self.pursuer_evader_begin_callback
-        #         self.handlers[-1].separate = self.pursuer_evader_separate_callback
-
-        #     for obj in self.poisons:
-        #         self.handlers.append(
-        #             self.space.add_collision_handler(
-        #                 pursuer.shape.collision_type, obj.shape.collision_type
-        #             )
-        #         )
-        #         self.handlers[-1].begin = self.pursuer_poison_begin_callback
-
-        # # Collision handlers for poisons v.s. evaders
-        # for poison in self.poisons:
-        #     for evader in self.evaders:
-        #         self.handlers.append(
-        #             self.space.add_collision_handler(
-        #                 poison.shape.collision_type, evader.shape.collision_type
-        #             )
-        #         )
-        #         self.handlers[-1].begin = self.return_false_begin_callback
-
-        # # Collision handlers for evaders v.s. evaders
-        # for i in range(self.n_evaders):
-        #     for j in range(i, self.n_evaders):
-        #         if not i == j:
-        #             self.handlers.append(
-        #                 self.space.add_collision_handler(
-        #                     self.evaders[i].shape.collision_type,
-        #                     self.evaders[j].shape.collision_type,
-        #                 )
-        #             )
-        #             self.handlers[-1].begin = self.return_false_begin_callback
-
-        # # Collision handlers for poisons v.s. poisons
-        # for i in range(self.n_poisons):
-        #     for j in range(i, self.n_poisons):
-        #         if not i == j:
-        #             self.handlers.append(
-        #                 self.space.add_collision_handler(
-        #                     self.poisons[i].shape.collision_type,
-        #                     self.poisons[j].shape.collision_type,
-        #                 )
-        #             )
-        #             self.handlers[-1].begin = self.return_false_begin_callback
-
-        # # Collision handlers for pursuers v.s. pursuers
-        # for i in range(self.n_pursuers):
-        #     for j in range(i, self.n_pursuers):
-        #         if not i == j:
-        #             self.handlers.append(
-        #                 self.space.add_collision_handler(
-        #                     self.pursuers[i].shape.collision_type,
-        #                     self.pursuers[j].shape.collision_type,
-        #                 )
-        #             )
-        #             self.handlers[-1].begin = self.return_false_begin_callback
+        # Collision handlers for handyman tools v.s. environment_objects
+        # NOTE: This looks nasty, but every list has only a few items, and this method
+        # does not get called often, so it does not significantly impact runtime
+        for handyman in self.handymen:
+            for section in handyman.current_tool.sections:
+                for tool_section_segment in section.shapes:
+                    for environment_object in self.goal.environment_objects:
+                        for environment_object_segment in environment_object.shapes:
+                            self.handlers.append(
+                                self.space.add_collision_handler(
+                                    tool_section_segment.shape.collision_type, environment_object_segment.shape.collision_type
+                                )
+                            )
+                            self.handlers[-1].begin = self.pursuer_evader_begin_callback
+                            self.handlers[-1].separate = self.pursuer_evader_separate_callback
 
     def reset(self):
         self.frames = 0
 
         # Add objects to space
         add_bounding_box(self.space)
-        self.add()
+        self.create()
         self.add_handlers()
 
         # Get observation
