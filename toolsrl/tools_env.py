@@ -67,6 +67,7 @@ class ToolsBaseEnvironment:
 
         ############# OBSERVATION SPACE
         ######## Tool
+        ### Positions:
         # - orientation (left [0], right [1])
         # - position x, y
         # - angle, angular velocity
@@ -80,6 +81,11 @@ class ToolsBaseEnvironment:
         #  - initial points x, y of tool section (with a hard cap at n possible points)
         ######## Goal
         #### For every EnvironmentObject (with a hard cap at n possible objects)
+        ### Positions:
+        #  - position (x, y), velocity (vx, vy)
+        #  - angle, angular velocity
+        #  - GOAL FLAG
+        #  - GOAL POSITION x, y to touch
         ### Properties:
         #  - weight
         #  - friction
@@ -88,11 +94,6 @@ class ToolsBaseEnvironment:
         #  - body type (static [0], dynamic [1])
         #  - section type (ball [0], polygon [1], etc.)
         #  - initial points x, y of environment object (with a hard cap at n possible points) OR radius if section type is ball
-        ### Positions:
-        #  - angle, angular velocity
-        #  - position (x, y), velocity (vx, vy)
-        #  - GOAL FLAG
-        #  - GOAL POSITION x, y to touch
 
         ############# ACTION SPACE
         # - velocity vx, vy of tool
@@ -295,10 +296,22 @@ class ToolsBaseEnvironment:
         return np.array(self.last_obs[agent_id], dtype=np.float32)
 
     def observe_list(self):
+        accomplishment_criteria = self.description['goals'][self.goal]['accomplishment-criteria']
+        goal_object_name = accomplishment_criteria['object']
+        goal_object_position = (accomplishment_criteria['touches']['x'], accomplishment_criteria['touches']['y'])
         # Grab observations regarding goal and environment
-        environment_object_properties = [[0.0, 0.0, 0.0, 0.0, 0.0] for _ in range (self.max_environment_objects)]
+        environment_object_positions = [[(-1.0, -1.0), (-1.0, -1.0), -1.0, -1.0, -1.0, (-1.0, -1.0)] for _ in range (self.max_environment_objects)]
+        environment_object_properties = [[-1.0, -1.0, -1.0, -1.0, -1.0] for _ in range (self.max_environment_objects)]
         environment_object_points = [[(-1.0, -1.0) for _ in range(self.max_vertices_per_environment_object)] for _ in range (self.max_environment_objects)]
         for i, environment_object in enumerate(self.goal.environment_objects):
+            environment_object_positions[i] = [
+                environment_object.body.position,
+                environment_object.body.velocity,
+                environment_object.body.angle % (2 * np.pi),
+                environment_object.body.angular_velocity,
+                environment_object.name == goal_object_name,
+                goal_object_position
+            ]
             environment_object_properties[i] = [
                 environment_object.weight,
                 environment_object.friction,
@@ -308,11 +321,18 @@ class ToolsBaseEnvironment:
             ]
             for j, point in enumerate(environment_object.points):
                 environment_object_points[i][j] = (point[0] / self.window_size[0], point[1] / self.window_size[1])
-        environment_observations = np.array(list(zip(environment_object_properties, environment_object_points))).flatten()
+        environment_observations = np.array(list(zip(environment_object_positions, environment_object_properties, environment_object_points))).flatten()
 
         # Grab observations per handyman
         handyman_observations = []
         for _, handyman in enumerate(self.handymen):
+            handyman_positions = [
+                handyman.current_tool.orientation,
+                handyman.current_tool.body.position,
+                handyman.current_tool.body.angle % (2 * np.pi),
+                handyman.current_tool.body.angular_velocity,
+            ]
+        
             # Grab observations regarding tool sections
             section_properties = [[0.0, 0.0, 0.0] for _ in range (self.max_tool_sections)]
             section_points = [[(-1.0, -1.0) for _ in range(self.max_vertices_per_tool_section)] for _ in range (self.max_tool_sections)]
@@ -324,16 +344,13 @@ class ToolsBaseEnvironment:
                 ]
                 for j, point in enumerate(handyman.current_tool.sections[i].points):
                     section_points[i][j] = (point[0] / self.window_size[0], point[1] / self.window_size[1])
-            tool_observations = np.array(list(zip(section_properties, section_points))).flatten()
+            handyman_tool_observations = np.array(list(zip(section_properties, section_points))).flatten()
 
             # Concatenate all observations
             handyman_observation = np.concatenate(
                 [
-                    handyman.current_tool.orientation,
-                    handyman.current_tool.body.position,
-                    handyman.current_tool.body.angle % (2 * np.pi),
-                    handyman.current_tool.body.angular_velocity,
-                    tool_observations,
+                    handyman_positions,
+                    handyman_tool_observations,
                     environment_observations
                 ]
             )
