@@ -186,19 +186,7 @@ class Goal:
         
         return False
     
-    def get_support_vector(self):
-        index = None
-        for idx, environment_object in enumerate(self.environment_objects):
-            if environment_object.name == self.accomplishment_criteria['object']:
-                index = idx
-        
-        vector_start_loc = self.environment_objects[index].body.position
-        vector_destination = (self.accomplishment_criteria['touches']['x'], self.accomplishment_criteria['touches']['y'])
-        vector_aim = [vector_destination[i] - vector_start_loc[i] for i, _ in enumerate(vector_destination)]
-        length = np.linalg.norm(vector_aim)
-        vector_aim = [direction / length for direction in vector_aim]
-
-        def get_hinge_point_on_accomplishment_object(self):
+    def _get_hinge_point_on_accomplishment_object(self):
             if self.hinge_point_on_accomplishment_object is not None:
                 return self.hinge_point_on_accomplishment_object
             if self.hinges is not None:
@@ -211,8 +199,20 @@ class Goal:
                     return self.hinge_point_on_accomplishment_object
             else:
                 return None
+            
+    def get_support_vector(self):
+        index = None
+        for idx, environment_object in enumerate(self.environment_objects):
+            if environment_object.name == self.accomplishment_criteria['object']:
+                index = idx
+        
+        vector_start_loc = self.environment_objects[index].body.position
+        vector_destination = (self.accomplishment_criteria['touches']['x'], self.accomplishment_criteria['touches']['y'])
+        vector_aim = [vector_destination[i] - vector_start_loc[i] for i, _ in enumerate(vector_destination)]
+        length = np.linalg.norm(vector_aim)
+        vector_aim = [direction / length for direction in vector_aim]
 
-        hinge_point_on_accomplishment_object = self.get_hinge_point_on_accomplishment_object()
+        hinge_point_on_accomplishment_object = self._get_hinge_point_on_accomplishment_object()
         if self.hinges is not None and hinge_point_on_accomplishment_object is not None:
             hinge_radius = np.linalg.norm([vector_start_loc[i] - self.hinge_point_on_accomplishment_object[i] for i, _ in enumerate(self.hinge_point_on_accomplishment_object)])
             # Find the tangent and account for obstacles
@@ -220,4 +220,5 @@ class Goal:
         return vector_aim
 
     def destroy(self):
-        pass
+        self.space.remove(*list(itertools.chain(*[shapes.shapes for shapes in self.shapes])))
+        return self

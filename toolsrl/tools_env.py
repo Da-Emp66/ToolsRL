@@ -57,6 +57,7 @@ class ToolsBaseEnvironment:
         self.num_available_tools = len(self.tool_names)
         self.goal_names = [key for key in self.goals]
         self.num_available_goals = len(self.goal_names)
+        self.goal = None
         self.initial_tool_position, self.initial_goal_position = get_initial_positions(self.description, self.goal) 
         self.get_spaces()
         self._seed()
@@ -136,7 +137,7 @@ class ToolsBaseEnvironment:
         """Add all moving objects to PyMunk space."""
         for idx, _ in enumerate(self.handymen):
             tool_name = self.tool_names[int(np.random.random() * self.num_available_tools)]
-            self.handymen[idx].current_tool = Tool(self.space, {tool_name: self.tools[tool_name]}, self.initial_tool_position)
+            self.handymen[idx].set_tool(Tool(self.space, {tool_name: self.tools[tool_name]}, self.initial_tool_position))
         self.goal.create()
 
     def add_handlers(self):
@@ -163,6 +164,9 @@ class ToolsBaseEnvironment:
             if self.handymen[idx].has_tool():
                 self.handymen[idx].remove_tool()
 
+        if self.goal is not None:
+            self.goal.destroy()
+
         # Add objects to space
         add_bounding_box(self.space)
         self.choose_random_goal()
@@ -185,19 +189,16 @@ class ToolsBaseEnvironment:
         action = action.reshape(2)
         thrust = np.linalg.norm(action)
         if thrust > self.max_acceleration:
-            # Limit added thrust to self.pursuer_max_accel
             action = action * (self.max_acceleration / thrust)
 
         handyman = self.handymen[agent_idx]
 
-        # Clip pursuer speed
         _velocity = np.clip(
             handyman.current_tool.body.velocity + np.multiply(action * np.array(self.window_size).reshape(2)),
             -self.max_velocity,
             self.max_velocity,
         )
 
-        # Set pursuer speed
         handyman.accelerate(_velocity[0], _velocity[1])
 
         # Penalize large thrusts
