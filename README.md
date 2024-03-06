@@ -4,3 +4,16 @@ To set up:
 
     conda create -n tools-rl python=3.10
     conda activate tools-rl
+    bash setup.sh
+
+To test the environment without reinforcement learning:
+
+    python3 ./tests/tool_sandbox.py --tool <toolname> --goal <goalname>
+    
+where `toolname` is one of the tools in `configurations/pz_ppo_config.yaml` (or a specified config file).
+
+To test the environment with reinforcement learning:
+
+    python3 ./tests/stable_baselines_ppo.py
+
+You should be able to train and retrieve a model from this, of which you can observe in action at the end of training.
