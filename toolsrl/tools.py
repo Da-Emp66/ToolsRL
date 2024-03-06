@@ -168,9 +168,12 @@ class Tool:
 
 
 class HandyMan:
-    def __init__(self, tool: Tool):
+    def __init__(self, tool: Optional[Tool] = None):
         self.observation_space = None
         self.action_space = None
+        self.current_tool = tool
+
+    def set_tool(self, tool: Tool):
         self.current_tool = tool
 
     def move(self, x, y):
@@ -178,3 +181,10 @@ class HandyMan:
         
     def accelerate(self, vx, vy):
         self.current_tool.reset_velocity(vx, vy)
+
+    def remove_tool(self):
+        self.current_tool.destroy()
+        self.current_tool = None
+
+    def has_tool(self) -> bool:
+        return self.current_tool is not None

@@ -1,3 +1,4 @@
+import itertools
 from typing import Dict, Any, Optional, List, Tuple
 
 import numpy as np
@@ -156,12 +157,13 @@ class Goal:
         self.space = space
         self.initial_point = initial_point
         self.coordinate_conversion_fn = coordinate_conversion_fn
+        self.hinge_point_on_accomplishment_object = None
         self.load_from_dict(description)
         self.create()
 
-    def _update_edges(self):
-        num_edges = len(self.points)
-        self.edges = [[self.points[idx]] + [self.points[(idx + 1) % num_edges]] for  idx, _ in enumerate(self.points)]
+    # def _update_edges(self):
+    #     num_edges = len(self.points)
+    #     self.edges = [[self.points[idx]] + [self.points[(idx + 1) % num_edges]] for  idx, _ in enumerate(self.points)]
 
     def _scale(self, factor: int | float) -> 'Goal':
         self.shapes = [shape * factor for shape in self.shapes]
@@ -173,16 +175,49 @@ class Goal:
     def __rmul__(self, other: int | float) -> 'Goal':
         return self._scale(other)
 
-    def _goal_accomplished(self) -> bool:
+    def goal_accomplished(self) -> bool:
         index = None
         for idx, environment_object in enumerate(self.environment_objects):
             if environment_object.name == self.accomplishment_criteria['object']:
                 index = idx
 
-        if self.environment_objects[index].is_touching((self.accomplishment_criteria['touches']['x'], self.accomplishment_criteria['touches']['y'])):
+        if self.environment_objects[index]._is_touching((self.accomplishment_criteria['touches']['x'], self.accomplishment_criteria['touches']['y'])):
             return True
         
         return False
     
-    def get_environment_state(self):
-        self.environment_objects
+    def get_support_vector(self):
+        index = None
+        for idx, environment_object in enumerate(self.environment_objects):
+            if environment_object.name == self.accomplishment_criteria['object']:
+                index = idx
+        
+        vector_start_loc = self.environment_objects[index].body.position
+        vector_destination = (self.accomplishment_criteria['touches']['x'], self.accomplishment_criteria['touches']['y'])
+        vector_aim = [vector_destination[i] - vector_start_loc[i] for i, _ in enumerate(vector_destination)]
+        length = np.linalg.norm(vector_aim)
+        vector_aim = [direction / length for direction in vector_aim]
+
+        def get_hinge_point_on_accomplishment_object(self):
+            if self.hinge_point_on_accomplishment_object is not None:
+                return self.hinge_point_on_accomplishment_object
+            if self.hinges is not None:
+                hinge_objects = list(itertools.chain(*[self.hinges[next(iter(hinge))] for hinge in self.hinges]))
+                hinge_on_accomplishment_object_idx = [next(iter(hinge_object)) for hinge_object in hinge_objects].index(self.accomplishment_criteria['object'])
+                if hinge_on_accomplishment_object_idx == -1:
+                    return None
+                else:
+                    self.hinge_point_on_accomplishment_object = (hinge_objects[hinge_on_accomplishment_object_idx]['point']['x'], hinge_objects[hinge_on_accomplishment_object_idx]['point']['y'])
+                    return self.hinge_point_on_accomplishment_object
+            else:
+                return None
+
+        hinge_point_on_accomplishment_object = self.get_hinge_point_on_accomplishment_object()
+        if self.hinges is not None and hinge_point_on_accomplishment_object is not None:
+            hinge_radius = np.linalg.norm([vector_start_loc[i] - self.hinge_point_on_accomplishment_object[i] for i, _ in enumerate(self.hinge_point_on_accomplishment_object)])
+            # Find the tangent and account for obstacles
+
+        return vector_aim
+
+    def destroy(self):
+        pass

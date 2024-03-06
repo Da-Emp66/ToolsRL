@@ -57,7 +57,6 @@ class ToolsBaseEnvironment:
         self.num_available_tools = len(self.tool_names)
         self.goal_names = [key for key in self.goals]
         self.num_available_goals = len(self.goal_names)
-        self.choose_random_goal()
         self.initial_tool_position, self.initial_goal_position = get_initial_positions(self.description, self.goal) 
         self.get_spaces()
         self._seed()
@@ -84,8 +83,9 @@ class ToolsBaseEnvironment:
         ### Positions:
         #  - position (x, y), velocity (vx, vy)
         #  - angle, angular velocity
-        #  - GOAL FLAG
-        #  - GOAL POSITION x, y to touch
+        #  - Goal flag
+        #  - Goal position x, y to touch
+        #  - Directional support vector (x, y)
         ### Properties:
         #  - weight
         #  - friction
@@ -102,7 +102,7 @@ class ToolsBaseEnvironment:
         """
 
         obs_for_tool = self.max_tool_sections * (3 + 2 * self.max_vertices_per_tool_section)
-        obs_for_environment = self.max_environment_objects * (2 + 2 * self.max_vertices_per_environment_object + 3 + 9)
+        obs_for_environment = self.max_environment_objects * (11 + 3 + 2 + 2 * self.max_vertices_per_environment_object)
         obs_dim = 5 + obs_for_tool + obs_for_environment
 
         observation_space = spaces.Box(
@@ -153,14 +153,19 @@ class ToolsBaseEnvironment:
                                     tool_section_segment.shape.collision_type, environment_object_segment.shape.collision_type
                                 )
                             )
-                            self.handlers[-1].begin = self.pursuer_evader_begin_callback
-                            self.handlers[-1].separate = self.pursuer_evader_separate_callback
+                            self.handlers[-1].begin = self.tool_section_v_environment_object_begin_callback
+                            self.handlers[-1].separate = self.tool_section_v_environment_object_separate_callback
 
     def reset(self):
         self.frames = 0
 
+        for idx, _ in enumerate(self.handymen):
+            if self.handymen[idx].has_tool():
+                self.handymen[idx].remove_tool()
+
         # Add objects to space
         add_bounding_box(self.space)
+        self.choose_random_goal()
         self.create()
         self.add_handlers()
 
@@ -187,9 +192,9 @@ class ToolsBaseEnvironment:
 
         # Clip pursuer speed
         _velocity = np.clip(
-            handyman.current_tool.body.velocity + action * self.pixel_scale,
-            -self.pursuer_speed,
-            self.pursuer_speed,
+            handyman.current_tool.body.velocity + np.multiply(action * np.array(self.window_size).reshape(2)),
+            -self.max_velocity,
+            self.max_velocity,
         )
 
         # Set pursuer speed
@@ -198,15 +203,15 @@ class ToolsBaseEnvironment:
         # Penalize large thrusts
         accel_penalty = self.thrust_penalty * math.sqrt((action**2).sum())
 
-        # Average thrust penalty among all agents, and assign each agent global portion designated by (1 - local_ratio)
+        # Average thrust penalty among all agents, and assign each agent global portion designated by (1 - agent_selfishness)
         self.control_rewards = (
             (accel_penalty / self.num_handymen)
             * np.ones(self.num_handymen)
-            * (1 - self.local_ratio)
+            * (1 - self.agent_selfishness)
         )
 
-        # Assign the current agent the local portion designated by local_ratio
-        self.control_rewards[agent_idx] += accel_penalty * self.local_ratio
+        # Assign the current agent the local portion designated by agent_selfishness
+        self.control_rewards[agent_idx] += accel_penalty * self.agent_selfishness
 
         if is_last:
             self.space.step(1 / self.fps)
@@ -217,6 +222,8 @@ class ToolsBaseEnvironment:
             for idx in range(self.num_handymen):
                 p = self.handymen[idx]
 
+                ############### FIX
+                ### ADD IN SUPPORT VECTOR STUFF
                 # reward for food caught, encountered and poison
                 self.behavior_rewards[idx] = (
                     self.food_reward * p.shape.food_indicator
@@ -224,17 +231,21 @@ class ToolsBaseEnvironment:
                     + self.poison_reward * p.shape.poison_indicator
                 )
 
-                p.shape.food_indicator = 0
-                p.shape.poison_indicator = 0
+                p.current_tool.shape.food_indicator = 0
+                p.current_tool.shape.poison_indicator = 0
+                ############### FIX
 
-            rewards = np.array(self.behavior_rewards) + np.array(self.control_rewards)
+            self.goal_accomplished = self.goal.goal_accomplished()
+            self.goal_accomplished_rewards = np.zeros(self.num_handymen) if self.goal_accomplished else np.array([self.goal_reward for _ in range(self.num_handymen)])
+            
+            rewards = np.array(self.behavior_rewards) + np.array(self.control_rewards) + np.array(self.goal_accomplished_rewards)
 
             local_reward = rewards
             global_reward = local_reward.mean()
 
-            # Distribute local and global rewards according to local_ratio
-            self.last_rewards = local_reward * self.local_ratio + global_reward * (
-                1 - self.local_ratio
+            # Distribute local and global rewards according to agent_selfishness
+            self.last_rewards = local_reward * self.agent_selfishness + global_reward * (
+                1 - self.agent_selfishness
             )
 
             self.frames += 1
@@ -245,11 +256,12 @@ class ToolsBaseEnvironment:
         return np.array(self.last_obs[agent_id], dtype=np.float32)
 
     def observe_list(self):
-        accomplishment_criteria = self.description['goals'][self.goal]['accomplishment-criteria']
+        accomplishment_criteria = self.description['goals'][self.goal.name]['accomplishment-criteria']
         goal_object_name = accomplishment_criteria['object']
         goal_object_position = (accomplishment_criteria['touches']['x'], accomplishment_criteria['touches']['y'])
+        goal_object_support_vector = self.goal.get_support_vector()
         # Grab observations regarding goal and environment
-        environment_object_positions = [[(-1.0, -1.0), (-1.0, -1.0), -1.0, -1.0, -1.0, (-1.0, -1.0)] for _ in range (self.max_environment_objects)]
+        environment_object_positions = [[(-1.0, -1.0), (-1.0, -1.0), -1.0, -1.0, -1.0, (-1.0, -1.0), (-1.0, -1.0)] for _ in range (self.max_environment_objects)]
         environment_object_properties = [[-1.0, -1.0, -1.0, -1.0, -1.0] for _ in range (self.max_environment_objects)]
         environment_object_points = [[(-1.0, -1.0) for _ in range(self.max_vertices_per_environment_object)] for _ in range (self.max_environment_objects)]
         for i, environment_object in enumerate(self.goal.environment_objects):
@@ -259,7 +271,8 @@ class ToolsBaseEnvironment:
                 environment_object.body.angle % (2 * np.pi),
                 environment_object.body.angular_velocity,
                 environment_object.name == goal_object_name,
-                goal_object_position
+                goal_object_position if environment_object.name == goal_object_name else (-1.0, -1.0),
+                goal_object_support_vector if environment_object.name == goal_object_name else (-1.0, -1.0)
             ]
             environment_object_properties[i] = [
                 environment_object.weight,
@@ -308,52 +321,19 @@ class ToolsBaseEnvironment:
 
         return handyman_observations
 
-    # def pursuer_evader_begin_callback(self, arbiter, space, data):
-    #     """Called when a collision between a pursuer and an evader occurs.
+    def tool_section_v_environment_object_begin_callback(self, arbiter, space, data):
+        tool_section_segment_shape, environment_object_shape = arbiter.shapes
+        if environment_object_shape.body_type == pymunk.Body.DYNAMIC:
+            tool_section_segment_shape.begin_dynamic_counter += 1
+        elif environment_object_shape.body_type == pymunk.Body.STATIC:
+            tool_section_segment_shape.begin_static_counter += 1
 
-    #     The counter of the evader increases by 1, if the counter reaches
-    #     n_coop, then, the pursuer catches the evader and gets a reward.
-    #     """
-    #     pursuer_shape, evader_shape = arbiter.shapes
-
-    #     # Add one collision to evader
-    #     evader_shape.counter += 1
-
-    #     # Indicate that food is touched by pursuer
-    #     pursuer_shape.food_touched_indicator += 1
-
-    #     if evader_shape.counter >= self.n_coop:
-    #         # For giving reward to pursuer
-    #         pursuer_shape.food_indicator = 1
-
-    #     return False
-
-    # def pursuer_evader_separate_callback(self, arbiter, space, data):
-    #     """Called when a collision between a pursuer and a poison ends.
-
-    #     If at this moment there are greater or equal than n_coop pursuers
-    #     that collides with this evader, the evader's position gets reset
-    #     and the pursuers involved will be rewarded.
-    #     """
-    #     pursuer_shape, evader_shape = arbiter.shapes
-
-    #     if evader_shape.counter < self.n_coop:
-    #         # Remove one collision from evader
-    #         evader_shape.counter -= 1
-    #     else:
-    #         evader_shape.counter = 0
-
-    #         # For giving reward to pursuer
-    #         pursuer_shape.food_indicator = 1
-
-    #         # Reset evader position & velocity
-    #         x, y = self._generate_coord(evader_shape.radius)
-    #         vx, vy = self._generate_speed(evader_shape.max_speed)
-
-    #         evader_shape.reset_position(x, y)
-    #         evader_shape.reset_velocity(vx, vy)
-
-    #     pursuer_shape.food_touched_indicator -= 1
+    def tool_section_v_environment_object_separate_callback(self, arbiter, space, data):
+        tool_section_segment_shape, environment_object_shape = arbiter.shapes
+        if environment_object_shape.body_type == pymunk.Body.DYNAMIC:
+            tool_section_segment_shape.separate_dynamic_counter += 1
+        elif environment_object_shape.body_type == pymunk.Body.STATIC:
+            tool_section_segment_shape.separate_static_counter += 1
 
     def render(self):
         if self.render_mode is None:
@@ -369,7 +349,7 @@ class ToolsBaseEnvironment:
                 self.screen = pygame.Surface((self.window_size[0], self.window_size[1]))
 
         self.screen.fill((255, 255, 255))
-        self.draw()
+        # self.draw()
         self.clock.tick(self.fps)
 
         observation = pygame.surfarray.pixels3d(self.screen)

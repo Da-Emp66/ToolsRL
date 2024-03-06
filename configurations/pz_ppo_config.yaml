@@ -3,8 +3,19 @@ max_tool_sections: 3
 max_vertices_per_tool_section: 9
 max_environment_objects: 5
 max_vertices_per_environment_object: 9
+max_velocity: 80
+thrust_penalty: -0.5
 max_acceleration: 1.0
 
+
+tool_touching_dynamic_object_reward: 10
+tool_separating_from_dynamic_object_reward: 4
+tool_touching_static_object_reward: -3
+tool_separating_from_static_object_reward: 1
+
+tool_following_support_vector_reward: 10
+agent_selfishness: 0.5
+goal_reward: 1000.0
 
 
 tools:
@@ -353,10 +364,9 @@ goals:
     accomplishment-criteria:
       object: nail
       touches:
-        x: 
-        y: 
-
-
+        x: 560
+        y: 650
+      support-vector-initial-perpendicular-pull: 0 # Obtain this from hinge knowledge
 
 offsets:
   open-the-chest:
