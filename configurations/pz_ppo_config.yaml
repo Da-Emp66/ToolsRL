@@ -253,8 +253,8 @@ goals:
     accomplishment-criteria:
       object: chest-top
       touches:
-        x: 255
-        y: 0
+        x: -140
+        y: 30
   kick-the-ball:
     environment-objects:
       - impediment:
@@ -295,8 +295,8 @@ goals:
     accomplishment-criteria:
       object: ball
       touches:
-        x: 1192
-        y: 1192
+        x: 1186
+        y: 10
   hit-the-nail:
     environment-objects:
       - wall1:
@@ -336,9 +336,9 @@ goals:
       - nail:
           type: dynamic
           shape: polygon
-          moment: 10000000000 # This needs to be very high for more stable simulations
+          moment: 100000000 # This needs to be very high for more stable simulations
           weight: 100
-          friction: 0.5
+          friction: 1000000000
           points:
             - point1:
                 x: 0

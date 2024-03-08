@@ -3,9 +3,8 @@ from typing import Dict, Any, Optional, List, Tuple
 
 import numpy as np
 import yaml
-import pygame
 import pymunk
-from pymunk.constraints import PivotJoint, PinJoint
+from pymunk.constraints import PinJoint
 
 EXPECTED_GOAL_PROPERTIES = {
     "accomplishment-criteria": None,
@@ -136,6 +135,12 @@ class Goal:
             ]
 
             self.space.add(*self.hinge_shapes)
+
+        self.goal_touch_body = pymunk.Body(100000, 1000000, body_type=pymunk.Body.STATIC)
+        self.goal_touch_shape = pymunk.Circle(self.goal_touch_body, 5)
+        self.goal_touch_shape.color = (255, 43, 203, 255)
+        self.goal_touch_body.position = self.initial_point[0] - self.accomplishment_criteria['touches']['x'], self.initial_point[1] - self.accomplishment_criteria['touches']['y']
+        self.space.add(self.goal_touch_body, self.goal_touch_shape)
         
         return self
 
@@ -160,10 +165,6 @@ class Goal:
         self.hinge_point_on_accomplishment_object = None
         self.load_from_dict(description)
         self.create()
-
-    # def _update_edges(self):
-    #     num_edges = len(self.points)
-    #     self.edges = [[self.points[idx]] + [self.points[(idx + 1) % num_edges]] for  idx, _ in enumerate(self.points)]
 
     def _scale(self, factor: int | float) -> 'Goal':
         self.shapes = [shape * factor for shape in self.shapes]
@@ -190,12 +191,13 @@ class Goal:
             if self.hinge_point_on_accomplishment_object is not None:
                 return self.hinge_point_on_accomplishment_object
             if self.hinges is not None:
-                hinge_objects = list(itertools.chain(*[self.hinges[next(iter(hinge))] for hinge in self.hinges]))
+                hinge_objects = list(itertools.chain(*[hinge[next(iter(hinge))] for hinge in self.hinges]))
                 hinge_on_accomplishment_object_idx = [next(iter(hinge_object)) for hinge_object in hinge_objects].index(self.accomplishment_criteria['object'])
                 if hinge_on_accomplishment_object_idx == -1:
                     return None
                 else:
-                    self.hinge_point_on_accomplishment_object = (hinge_objects[hinge_on_accomplishment_object_idx]['point']['x'], hinge_objects[hinge_on_accomplishment_object_idx]['point']['y'])
+                    hinge_on_accomplishment_object_point_definitions = hinge_objects[hinge_on_accomplishment_object_idx][next(iter(hinge_objects[hinge_on_accomplishment_object_idx]))]
+                    self.hinge_point_on_accomplishment_object = (hinge_on_accomplishment_object_point_definitions['point']['x'], hinge_on_accomplishment_object_point_definitions['point']['y'])
                     return self.hinge_point_on_accomplishment_object
             else:
                 return None
@@ -208,17 +210,25 @@ class Goal:
         
         vector_start_loc = self.environment_objects[index].body.position
         vector_destination = (self.accomplishment_criteria['touches']['x'], self.accomplishment_criteria['touches']['y'])
-        vector_aim = [vector_destination[i] - vector_start_loc[i] for i, _ in enumerate(vector_destination)]
+        vector_aim = [vector_destination[i] - vector_start_loc[i] for i in range(2)]
         length = np.linalg.norm(vector_aim)
-        vector_aim = [direction / length for direction in vector_aim]
+        unit_vector_aim = [direction / length for direction in vector_aim]
 
         hinge_point_on_accomplishment_object = self._get_hinge_point_on_accomplishment_object()
         if self.hinges is not None and hinge_point_on_accomplishment_object is not None:
-            hinge_radius = np.linalg.norm([vector_start_loc[i] - self.hinge_point_on_accomplishment_object[i] for i, _ in enumerate(self.hinge_point_on_accomplishment_object)])
+            hinge_radius = np.linalg.norm([vector_start_loc[i] - self.hinge_point_on_accomplishment_object[i] for i in range(2)])
+            slope = ((self.hinge_point_on_accomplishment_object[1] - vector_start_loc[1]) /
+                        (self.hinge_point_on_accomplishment_object[0] - vector_start_loc[0]))
+            tangent_slope = -1 / slope
             # Find the tangent and account for obstacles
+            tangent_vector = [tangent_slope, 1]
+            unit_vector_aim = tangent_vector / np.linalg.norm(tangent_vector)
 
-        return vector_aim
+        return unit_vector_aim
 
     def destroy(self):
         self.space.remove(*list(itertools.chain(*[shapes.shapes for shapes in self.shapes])))
+        self.space.remove(*self.hinge_shapes)
+        self.space.remove(self.goal_touch_body)
         return self
+    

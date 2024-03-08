@@ -1,8 +1,6 @@
 from typing import List
 
-import re
 import argparse
-import numpy as np
 import sys
 import yaml
 import pygame
@@ -58,6 +56,7 @@ def main(args):
             # print(tool.body.angular_velocity)
             # print(tool.body.angle % (2 * np.pi))
             # print([[shape.a for shape in created_section.shapes] for created_section in tool.shapes])
+            print(goal.get_support_vector())
             tool.reset_position(pos[0] - initial_tool_pos[0], pos[1] - initial_tool_pos[1])
 
         screen.fill((255,255,255))
