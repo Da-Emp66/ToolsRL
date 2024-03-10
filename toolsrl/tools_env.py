@@ -6,10 +6,12 @@ https://pettingzoo.farama.org/environments/sisl/waterworld/
 Author: Asher B. Gibson
 """
 
+import itertools
 from typing import Optional, Literal
 
 import math
 import pymunk
+import pymunk.pygame_util
 import gymnasium
 import numpy as np
 from gymnasium import spaces
@@ -20,7 +22,7 @@ from toolsrl.goals import Goal
 from toolsrl.utils import convert_coordinates, get_initial_positions, add_bounding_box, WINDOW_SIZE_X, WINDOW_SIZE_Y
 from toolsrl.tools import HandyMan, Tool
 
-DEFAULT_CONFIG = "./configurations/tools_env_config.yaml"
+DEFAULT_CONFIG = "./configurations/pz_ppo_config.yaml"
 FPS = 15
 
 class ToolsBaseEnvironment:
@@ -45,20 +47,17 @@ class ToolsBaseEnvironment:
         self.handymen = [HandyMan() for _ in range(self.num_handymen)]
         self.max_acceleration = 1.0
 
-    def __post_init__(self):
         with open(self.configuration_file) as cfg:
             self.description = yaml.safe_load(cfg)
             cfg.close()
         for key in self.description:
-            if not self.__dict__.get(key, True):
-                self.__setattr__(key, self.description.get(key))
-
+            self.__setattr__(key, self.description.get(key))
+        
         self.tool_names = [key for key in self.tools]
         self.num_available_tools = len(self.tool_names)
         self.goal_names = [key for key in self.goals]
         self.num_available_goals = len(self.goal_names)
         self.goal = None
-        self.initial_tool_position, self.initial_goal_position = get_initial_positions(self.description, self.goal) 
         self.get_spaces()
         self._seed()
 
@@ -113,10 +112,16 @@ class ToolsBaseEnvironment:
             dtype=np.float32,
         )
 
+        # action_space = spaces.Box(
+        #     low=np.float32(-1.0),
+        #     high=np.float32(1.0),
+        #     shape=(3,),
+        #     dtype=np.float32,
+        # )
         action_space = spaces.Box(
             low=np.float32(-1.0),
             high=np.float32(1.0),
-            shape=(3,),
+            shape=(2,),
             dtype=np.float32,
         )
 
@@ -130,8 +135,9 @@ class ToolsBaseEnvironment:
         return [seed]
     
     def choose_random_goal(self):
-        selected = np.random.choice(self.description['goals'].keys())
-        self.goal = Goal(self.space, {selected: self.description['goals'][selected]}, self.initial_goal_pos, convert_coordinates)
+        selected = np.random.choice(list(self.description['goals'].keys()))
+        self.initial_tool_position, self.initial_goal_position = get_initial_positions(self.description, selected)
+        self.goal = Goal(self.space, {selected: self.description['goals'][selected]}, self.initial_goal_position, convert_coordinates)
 
     def create(self):
         """Add all moving objects to PyMunk space."""
@@ -151,11 +157,20 @@ class ToolsBaseEnvironment:
                         for environment_object_segment in environment_object.shapes:
                             self.handlers.append(
                                 self.space.add_collision_handler(
-                                    tool_section_segment.shape.collision_type, environment_object_segment.shape.collision_type
+                                    tool_section_segment.collision_type, environment_object_segment.collision_type
                                 )
                             )
                             self.handlers[-1].begin = self.tool_section_v_environment_object_begin_callback
                             self.handlers[-1].separate = self.tool_section_v_environment_object_separate_callback
+        for environment_object in self.goal.environment_objects:
+            if environment_object.name == self.goal.accomplishment_criteria['object']:
+                for environment_object_segment in environment_object.shapes:
+                    self.handlers.append(
+                        self.space.add_collision_handler(
+                            environment_object_segment.collision_type, self.goal.goal_touch_shape.collision_type
+                        )
+                    )
+                    self.handlers[-1].begin = self.goal_accomplishment_callback
 
     def reset(self):
         self.frames = 0
@@ -194,7 +209,7 @@ class ToolsBaseEnvironment:
         handyman = self.handymen[agent_idx]
 
         _velocity = np.clip(
-            handyman.current_tool.body.velocity + np.multiply(action * np.array(self.window_size).reshape(2)),
+            handyman.current_tool.body.velocity + np.multiply(action, np.array(self.window_size).reshape(2)),
             -self.max_velocity,
             self.max_velocity,
         )
@@ -223,23 +238,29 @@ class ToolsBaseEnvironment:
             for idx in range(self.num_handymen):
                 p = self.handymen[idx]
 
-                ############### FIX
-                ### ADD IN SUPPORT VECTOR STUFF
-                # reward for food caught, encountered and poison
+                # Add in support vector following
                 self.behavior_rewards[idx] = (
-                    self.food_reward * p.shape.food_indicator
-                    + self.encounter_reward * p.shape.food_touched_indicator
-                    + self.poison_reward * p.shape.poison_indicator
+                    self.tool_touching_dynamic_object_reward * sum(list(itertools.chain(*[[shape.begin_dynamic_counter for shape in section.shapes] for section in p.current_tool.shapes]))) +
+                    self.tool_separating_from_dynamic_object_reward * sum(list(itertools.chain(*[[shape.separate_dynamic_counter for shape in section.shapes] for section in p.current_tool.shapes]))) +
+                    self.tool_touching_static_object_reward * sum(list(itertools.chain(*[[shape.begin_static_counter for shape in section.shapes] for section in p.current_tool.shapes]))) +
+                    self.tool_separating_from_static_object_reward * sum(list(itertools.chain(*[[shape.separate_static_counter for shape in section.shapes] for section in p.current_tool.shapes]))) +
+                    self.goal_reward * self.goal.goal_touch_shape.goal_accomplishment_counter
                 )
 
-                p.current_tool.shape.food_indicator = 0
-                p.current_tool.shape.poison_indicator = 0
-                ############### FIX
+                for i1, section in enumerate(p.current_tool.shapes):
+                    for i2, _ in enumerate(section.shapes):
+                        p.current_tool.shapes[i1].shapes[i2].begin_dynamic_counter = 0
+                        p.current_tool.shapes[i1].shapes[i2].separate_dynamic_counter = 0
+                        p.current_tool.shapes[i1].shapes[i2].begin_static_counter = 0
+                        p.current_tool.shapes[i1].shapes[i2].separate_static_counter = 0
 
-            self.goal_accomplished = self.goal.goal_accomplished()
-            self.goal_accomplished_rewards = np.zeros(self.num_handymen) if self.goal_accomplished else np.array([self.goal_reward for _ in range(self.num_handymen)])
+            if self.goal.goal_touch_shape.goal_accomplishment_counter == 1:
+                self.last_dones = [True for _ in range(self.num_handymen)]
+
+            #self.goal_accomplished = self.goal.goal_accomplished()
+            #self.goal_accomplished_rewards = np.zeros(self.num_handymen) if self.goal_accomplished else np.array([self.goal_reward for _ in range(self.num_handymen)])
             
-            rewards = np.array(self.behavior_rewards) + np.array(self.control_rewards) + np.array(self.goal_accomplished_rewards)
+            rewards = np.array(self.behavior_rewards) + np.array(self.control_rewards)# + np.array(self.goal_accomplished_rewards)
 
             local_reward = rewards
             global_reward = local_reward.mean()
@@ -262,52 +283,71 @@ class ToolsBaseEnvironment:
         goal_object_position = (accomplishment_criteria['touches']['x'], accomplishment_criteria['touches']['y'])
         goal_object_support_vector = self.goal.get_support_vector()
         # Grab observations regarding goal and environment
-        environment_object_positions = [[(-1.0, -1.0), (-1.0, -1.0), -1.0, -1.0, -1.0, (-1.0, -1.0), (-1.0, -1.0)] for _ in range (self.max_environment_objects)]
+        environment_object_positions = [[-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0] for _ in range (self.max_environment_objects)]
         environment_object_properties = [[-1.0, -1.0, -1.0, -1.0, -1.0] for _ in range (self.max_environment_objects)]
-        environment_object_points = [[(-1.0, -1.0) for _ in range(self.max_vertices_per_environment_object)] for _ in range (self.max_environment_objects)]
+        environment_object_points = [[[-1.0, -1.0] for _ in range(self.max_vertices_per_environment_object)] for _ in range (self.max_environment_objects)]
         for i, environment_object in enumerate(self.goal.environment_objects):
             environment_object_positions[i] = [
-                environment_object.body.position,
-                environment_object.body.velocity,
+                environment_object.body.position[0],
+                environment_object.body.position[1],
+                environment_object.body.velocity[0],
+                environment_object.body.velocity[1],
                 environment_object.body.angle % (2 * np.pi),
                 environment_object.body.angular_velocity,
                 environment_object.name == goal_object_name,
-                goal_object_position if environment_object.name == goal_object_name else (-1.0, -1.0),
-                goal_object_support_vector if environment_object.name == goal_object_name else (-1.0, -1.0)
+                goal_object_position[0] if environment_object.name == goal_object_name else -1.0,
+                goal_object_position[1] if environment_object.name == goal_object_name else -1.0,
+                goal_object_support_vector[0] if environment_object.name == goal_object_name else -1.0,
+                goal_object_support_vector[1] if environment_object.name == goal_object_name else -1.0
             ]
             environment_object_properties[i] = [
                 environment_object.weight,
-                environment_object.friction,
-                environment_object.moment,
-                environment_object.type,
-                environment_object.shape
+                environment_object.friction if environment_object.friction is not None else 1.0,
+                environment_object.body.moment if environment_object.body.moment != float('inf') else 10000.0,
+                ['static', 'dynamic'].index(environment_object.type),
+                ['polygon', 'circle'].index(environment_object.shape)
             ]
             for j, point in enumerate(environment_object.points):
                 environment_object_points[i][j] = (point[0] / self.window_size[0], point[1] / self.window_size[1])
-        environment_observations = np.array(list(zip(environment_object_positions, environment_object_properties, environment_object_points))).flatten()
+        
+        environment_observations = np.concatenate(
+            [
+                np.array(environment_object_positions, dtype=np.float64).flatten(),
+                np.array(environment_object_properties, dtype=np.float64).flatten(),
+                np.array(environment_object_points, dtype=np.float64).flatten()
+            ]
+        )
 
         # Grab observations per handyman
         handyman_observations = []
         for _, handyman in enumerate(self.handymen):
-            handyman_positions = [
+            handyman_positions = np.array([
                 handyman.current_tool.orientation,
-                handyman.current_tool.body.position,
+                handyman.current_tool.body.position[0],
+                handyman.current_tool.body.position[1],
                 handyman.current_tool.body.angle % (2 * np.pi),
                 handyman.current_tool.body.angular_velocity,
-            ]
+            ], dtype=np.float64)
         
             # Grab observations regarding tool sections
             section_properties = [[0.0, 0.0, 0.0] for _ in range (self.max_tool_sections)]
-            section_points = [[(-1.0, -1.0) for _ in range(self.max_vertices_per_tool_section)] for _ in range (self.max_tool_sections)]
+            section_points = [[[-1.0, -1.0] for _ in range(self.max_vertices_per_tool_section)] for _ in range (self.max_tool_sections)]
             for i, _ in enumerate(handyman.current_tool.sections):
+
                 section_properties[i] = [
                     handyman.current_tool.sections[i].weight,
                     handyman.current_tool.sections[i].friction,
-                    handyman.current_tool.sections[i].moment
+                    handyman.current_tool.sections[i].body.moment
                 ]
                 for j, point in enumerate(handyman.current_tool.sections[i].points):
                     section_points[i][j] = (point[0] / self.window_size[0], point[1] / self.window_size[1])
-            handyman_tool_observations = np.array(list(zip(section_properties, section_points))).flatten()
+            handyman_tool_observations = np.concatenate(
+                [
+                    np.array(section_properties, dtype=np.float64).flatten(),
+                    np.array(section_points, dtype=np.float64).flatten()
+                ]
+            )
+            # print(handyman_positions)
 
             # Concatenate all observations
             handyman_observation = np.concatenate(
@@ -324,17 +364,26 @@ class ToolsBaseEnvironment:
 
     def tool_section_v_environment_object_begin_callback(self, arbiter, space, data):
         tool_section_segment_shape, environment_object_shape = arbiter.shapes
-        if environment_object_shape.body_type == pymunk.Body.DYNAMIC:
+        # print(tool_section_segment_shape)
+        if environment_object_shape.body.body_type == pymunk.Body.DYNAMIC:
             tool_section_segment_shape.begin_dynamic_counter += 1
-        elif environment_object_shape.body_type == pymunk.Body.STATIC:
+        elif environment_object_shape.body.body_type == pymunk.Body.STATIC:
             tool_section_segment_shape.begin_static_counter += 1
+        return True
 
     def tool_section_v_environment_object_separate_callback(self, arbiter, space, data):
         tool_section_segment_shape, environment_object_shape = arbiter.shapes
-        if environment_object_shape.body_type == pymunk.Body.DYNAMIC:
+        # print(tool_section_segment_shape)
+        if environment_object_shape.body.body_type == pymunk.Body.DYNAMIC:
             tool_section_segment_shape.separate_dynamic_counter += 1
-        elif environment_object_shape.body_type == pymunk.Body.STATIC:
+        elif environment_object_shape.body.body_type == pymunk.Body.STATIC:
             tool_section_segment_shape.separate_static_counter += 1
+        return True
+
+    def goal_accomplishment_callback(self, arbiter, space, data):
+        _, goal_touch_shape = arbiter.shapes
+        goal_touch_shape.goal_accomplishment_counter = 1
+        return True
 
     def render(self):
         if self.render_mode is None:
@@ -350,7 +399,11 @@ class ToolsBaseEnvironment:
                 self.screen = pygame.Surface((self.window_size[0], self.window_size[1]))
 
         self.screen.fill((255, 255, 255))
-        # self.draw()
+        draw_options = pymunk.pygame_util.DrawOptions(self.screen)
+        self.space.debug_draw(draw_options)
+        # space.step(1/FPS)
+        # pygame.display.flip()
+        # clock.tick(int(FPS))
         self.clock.tick(self.fps)
 
         observation = pygame.surfarray.pixels3d(self.screen)

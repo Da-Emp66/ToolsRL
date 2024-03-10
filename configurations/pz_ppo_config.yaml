@@ -1,4 +1,6 @@
 num_handymen: 1
+max_cycles: 2000
+
 max_tool_sections: 3
 max_vertices_per_tool_section: 9
 max_environment_objects: 5
@@ -15,7 +17,7 @@ tool_separating_from_static_object_reward: 1
 
 tool_following_support_vector_reward: 10
 agent_selfishness: 0.5
-goal_reward: 1000.0
+goal_reward: 1000
 
 
 tools:

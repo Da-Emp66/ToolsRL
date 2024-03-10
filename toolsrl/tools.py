@@ -24,6 +24,13 @@ EXPECTED_TOOL_SECTION_PROPERTIES = {
 class ToolSection:
     def create(self) -> List[pymunk.Segment]:
         self.shapes = [pymunk.Segment(self.body, edge[0], edge[1], self.line_width) for edge in self.edges]
+        for idx, _ in enumerate(self.shapes):
+            self.shapes[idx].custom_value = 1
+            self.shapes[idx].collision_type = 1
+            self.shapes[idx].begin_dynamic_counter = 0
+            self.shapes[idx].separate_dynamic_counter = 0
+            self.shapes[idx].begin_static_counter = 0
+            self.shapes[idx].separate_static_counter = 0
 
         for segment in self.shapes:
             segment.color = (self.color['red'], self.color['green'], self.color['blue'], 255)

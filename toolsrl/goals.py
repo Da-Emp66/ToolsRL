@@ -40,6 +40,10 @@ class EnvironmentObject:
             self.shapes = [pymunk.Segment(self.body, edge[0], edge[1], self.line_width) for edge in self.edges]
         elif self.shape == "circle":
             self.shapes = [pymunk.Circle(self.body, self.radius)]
+
+        for idx, _ in enumerate(self.shapes):
+            self.shapes[idx].custom_value = 1
+            self.shapes[idx].collision_type = 2
             
         if self.friction is not None:
             for idx, _ in enumerate(self.shapes):
@@ -105,6 +109,7 @@ class Goal:
                 environment_object.body.position = self.initial_point
                 environment_object.body.velocity = (0, 0)
 
+        self.hinge_shapes = []
         if self.hinges is not None:
             all_hinges, hinge_objects, hinge_points = [], [], []
             for hinge in self.hinges:
@@ -138,7 +143,10 @@ class Goal:
 
         self.goal_touch_body = pymunk.Body(100000, 1000000, body_type=pymunk.Body.STATIC)
         self.goal_touch_shape = pymunk.Circle(self.goal_touch_body, 5)
+        self.goal_touch_shape.goal_accomplishment_counter = 0
         self.goal_touch_shape.color = (255, 43, 203, 255)
+        self.goal_touch_shape.custom_value = 1
+        self.goal_touch_shape.collision_type = 3
         self.goal_touch_body.position = self.initial_point[0] - self.accomplishment_criteria['touches']['x'], self.initial_point[1] - self.accomplishment_criteria['touches']['y']
         self.space.add(self.goal_touch_body, self.goal_touch_shape)
         
@@ -208,21 +216,34 @@ class Goal:
             if environment_object.name == self.accomplishment_criteria['object']:
                 index = idx
         
-        vector_start_loc = self.environment_objects[index].body.position
+        # TODO: Dynamically adjust this vector
+        # vector_start_loc = self.environment_objects[index].body.position
+        centers_of_all_edges = list(map(lambda edge: ((edge[0][0] + edge[1][0]) * -0.5, (edge[0][1] + edge[1][1]) * -0.5), self.environment_objects[index].edges))
+        x_accumulator = 0
+        y_accumulator = 0
+        for center in centers_of_all_edges:
+            x_accumulator += center[0]
+            y_accumulator += center[1]
+        num_edges_in_accomplishment_object = len(self.environment_objects[index].edges)
+        if num_edges_in_accomplishment_object == 0:
+            x_accumulator, y_accumulator = (15, 15)
+            num_edges_in_accomplishment_object = 1
+        vector_start_loc = tuple([x_accumulator / num_edges_in_accomplishment_object, y_accumulator / num_edges_in_accomplishment_object])
         vector_destination = (self.accomplishment_criteria['touches']['x'], self.accomplishment_criteria['touches']['y'])
         vector_aim = [vector_destination[i] - vector_start_loc[i] for i in range(2)]
         length = np.linalg.norm(vector_aim)
         unit_vector_aim = [direction / length for direction in vector_aim]
 
-        hinge_point_on_accomplishment_object = self._get_hinge_point_on_accomplishment_object()
-        if self.hinges is not None and hinge_point_on_accomplishment_object is not None:
-            hinge_radius = np.linalg.norm([vector_start_loc[i] - self.hinge_point_on_accomplishment_object[i] for i in range(2)])
-            slope = ((self.hinge_point_on_accomplishment_object[1] - vector_start_loc[1]) /
-                        (self.hinge_point_on_accomplishment_object[0] - vector_start_loc[0]))
-            tangent_slope = -1 / slope
-            # Find the tangent and account for obstacles
-            tangent_vector = [tangent_slope, 1]
-            unit_vector_aim = tangent_vector / np.linalg.norm(tangent_vector)
+        # TODO: During dynamic adjustment of the vector, account for hinges
+        # hinge_point_on_accomplishment_object = self._get_hinge_point_on_accomplishment_object()
+        # if self.hinges is not None and hinge_point_on_accomplishment_object is not None:
+        #     hinge_radius = np.linalg.norm([vector_start_loc[i] - self.hinge_point_on_accomplishment_object[i] for i in range(2)])
+        #     slope = ((self.hinge_point_on_accomplishment_object[1] - vector_start_loc[1]) /
+        #                 (self.hinge_point_on_accomplishment_object[0] - vector_start_loc[0]))
+        #     tangent_slope = -1 / slope
+        #     # Find the tangent and account for obstacles
+        #     tangent_vector = [tangent_slope, 1]
+        #     unit_vector_aim = tangent_vector / np.linalg.norm(tangent_vector)
 
         return unit_vector_aim
 
