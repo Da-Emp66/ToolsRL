@@ -1,3 +1,4 @@
+from typing import Literal
 from gymnasium.utils import EzPickle
 
 from pettingzoo import AECEnv

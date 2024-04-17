@@ -28,9 +28,12 @@ FPS = 15
 class ToolsBaseEnvironment:
     def __init__(
             self,
+            policy: Literal["mlp", "cnn"],
             configuration_filename: str = DEFAULT_CONFIG,
-            render_mode: Optional[Literal["human"]] = None,
+            render_mode: Optional[Literal["human", "rgb_array"]] = "rgb_array",
         ):
+        print(f"Using {policy.upper()} policy...")
+        self.policy = policy
         self.configuration_file = configuration_filename
         self.environment_name = "ToolsRL_v1"
         self.window_size = (WINDOW_SIZE_X, WINDOW_SIZE_Y)
@@ -41,7 +44,19 @@ class ToolsBaseEnvironment:
         self.tools = None
         self.goals = None
         self.render_mode = render_mode
-        self.screen = None
+        if policy == "mlp":
+            self.screen = None
+        else:
+            if self.render_mode == "human":
+                pygame.init()
+                self.screen = pygame.display.set_mode((self.window_size[0], self.window_size[1]))
+                pygame.display.set_caption(self.environment_name)
+            else:
+                self.screen = pygame.Surface((self.window_size[0], self.window_size[1]))
+
+            self.screen.fill((255, 255, 255))
+            draw_options = pymunk.pygame_util.DrawOptions(self.screen)
+            self.space.debug_draw(draw_options)
         self.frames = 0
         self.num_handymen = 1
         self.handymen = [HandyMan() for _ in range(self.num_handymen)]
@@ -110,6 +125,11 @@ class ToolsBaseEnvironment:
             high=np.float32(1.0),
             shape=(obs_dim,),
             dtype=np.float32,
+        ) if self.policy == "mlp" else spaces.Box(
+            low=0,
+            high=255,
+            shape=(self.window_size[0], self.window_size[1], 3),
+            dtype=np.uint8,
         )
 
         # action_space = spaces.Box(
@@ -119,8 +139,8 @@ class ToolsBaseEnvironment:
         #     dtype=np.float32,
         # )
         action_space = spaces.Box(
-            low=np.float32(-1.0),
-            high=np.float32(1.0),
+            low=np.float32(-100.0),
+            high=np.float32(100.0),
             shape=(2,),
             dtype=np.float32,
         )
@@ -137,7 +157,7 @@ class ToolsBaseEnvironment:
     def choose_random_goal(self):
         selected = np.random.choice(list(self.description['goals'].keys()))
         self.initial_tool_position, self.initial_goal_position = get_initial_positions(self.description, selected)
-        self.goal = Goal(self.space, {selected: self.description['goals'][selected]}, self.initial_goal_position, convert_coordinates)
+        self.goal = Goal(self.space, {selected: self.description['goals'][selected]}, self.initial_goal_position, convert_coordinates, create_now=False)
 
     def create(self):
         """Add all moving objects to PyMunk space."""
@@ -206,15 +226,25 @@ class ToolsBaseEnvironment:
         if thrust > self.max_acceleration:
             action = action * (self.max_acceleration / thrust)
 
-        handyman = self.handymen[agent_idx]
+        # handyman = self.handymen[agent_idx]
 
-        _velocity = np.clip(
-            handyman.current_tool.body.velocity + np.multiply(action, np.array(self.window_size).reshape(2)),
+        # _velocity = np.clip(
+        #     handyman.current_tool.body.velocity + np.multiply(action, np.array(self.window_size).reshape(2)),
+        #     -self.max_velocity,
+        #     self.max_velocity,
+        # )
+
+        # print(_velocity)
+
+        # handyman.accelerate(_velocity[0], _velocity[1])
+        
+        action = np.clip(
+            np.multiply(action, np.array(self.window_size).reshape(2)), # np.array([self.max_velocity, self.max_velocity]).reshape(2)),
             -self.max_velocity,
             self.max_velocity,
         )
-
-        handyman.accelerate(_velocity[0], _velocity[1])
+        
+        self.handymen[agent_idx].move(self.handymen[agent_idx].current_tool.grip.position[0] + action[0], self.handymen[agent_idx].current_tool.grip.position[1] + action[1])
 
         # Penalize large thrusts
         accel_penalty = self.thrust_penalty * math.sqrt((action**2).sum())
@@ -257,10 +287,7 @@ class ToolsBaseEnvironment:
             if self.goal.goal_touch_shape.goal_accomplishment_counter == 1:
                 self.last_dones = [True for _ in range(self.num_handymen)]
 
-            #self.goal_accomplished = self.goal.goal_accomplished()
-            #self.goal_accomplished_rewards = np.zeros(self.num_handymen) if self.goal_accomplished else np.array([self.goal_reward for _ in range(self.num_handymen)])
-            
-            rewards = np.array(self.behavior_rewards) + np.array(self.control_rewards)# + np.array(self.goal_accomplished_rewards)
+            rewards = np.array(self.behavior_rewards) + np.array(self.control_rewards)
 
             local_reward = rewards
             global_reward = local_reward.mean()
@@ -278,6 +305,12 @@ class ToolsBaseEnvironment:
         return np.array(self.last_obs[agent_id], dtype=np.float32)
 
     def observe_list(self):
+        if self.policy == "cnn":
+            observation = pygame.surfarray.pixels3d(self.screen)
+            observation = np.rot90(observation, k=3)
+            observation = np.fliplr(observation)
+            return [observation for _ in self.handymen]
+        
         accomplishment_criteria = self.description['goals'][self.goal.name]['accomplishment-criteria']
         goal_object_name = accomplishment_criteria['object']
         goal_object_position = (accomplishment_criteria['touches']['x'], accomplishment_criteria['touches']['y'])
@@ -288,22 +321,22 @@ class ToolsBaseEnvironment:
         environment_object_points = [[[-1.0, -1.0] for _ in range(self.max_vertices_per_environment_object)] for _ in range (self.max_environment_objects)]
         for i, environment_object in enumerate(self.goal.environment_objects):
             environment_object_positions[i] = [
-                environment_object.body.position[0],
-                environment_object.body.position[1],
-                environment_object.body.velocity[0],
-                environment_object.body.velocity[1],
-                environment_object.body.angle % (2 * np.pi),
-                environment_object.body.angular_velocity,
+                environment_object.body.position[0] / self.window_size[0],
+                environment_object.body.position[1] / self.window_size[1],
+                environment_object.body.velocity[0] / self.max_velocity,
+                environment_object.body.velocity[1] / self.max_velocity,
+                (environment_object.body.angle % (2 * np.pi)) / np.pi,
+                environment_object.body.angular_velocity / self.scaling['max_angular_velocity'],
                 environment_object.name == goal_object_name,
-                goal_object_position[0] if environment_object.name == goal_object_name else -1.0,
-                goal_object_position[1] if environment_object.name == goal_object_name else -1.0,
-                goal_object_support_vector[0] if environment_object.name == goal_object_name else -1.0,
-                goal_object_support_vector[1] if environment_object.name == goal_object_name else -1.0
+                goal_object_position[0] / self.window_size[0] if environment_object.name == goal_object_name else -1.0,
+                goal_object_position[1] / self.window_size[1] if environment_object.name == goal_object_name else -1.0,
+                goal_object_support_vector[0] if environment_object.name == goal_object_name else -1.0, # The support vector is already a unit
+                goal_object_support_vector[1] if environment_object.name == goal_object_name else -1.0 # vector, so scaling isn't required here
             ]
             environment_object_properties[i] = [
-                environment_object.weight,
-                environment_object.friction if environment_object.friction is not None else 1.0,
-                environment_object.body.moment if environment_object.body.moment != float('inf') else 10000.0,
+                environment_object.weight / self.scaling['max_weight'],
+                environment_object.friction / self.scaling['max_friction'] if environment_object.friction is not None else 1.0,
+                environment_object.body.moment / self.scaling['max_moment'] if environment_object.body.moment != float('inf') else 10000.0,
                 ['static', 'dynamic'].index(environment_object.type),
                 ['polygon', 'circle'].index(environment_object.shape)
             ]
@@ -323,10 +356,10 @@ class ToolsBaseEnvironment:
         for _, handyman in enumerate(self.handymen):
             handyman_positions = np.array([
                 handyman.current_tool.orientation,
-                handyman.current_tool.body.position[0],
-                handyman.current_tool.body.position[1],
-                handyman.current_tool.body.angle % (2 * np.pi),
-                handyman.current_tool.body.angular_velocity,
+                handyman.current_tool.body.position[0] / self.window_size[0],
+                handyman.current_tool.body.position[1] / self.window_size[1],
+                (handyman.current_tool.body.angle % (2 * np.pi)) / np.pi,
+                handyman.current_tool.body.angular_velocity / self.scaling['max_angular_velocity'],
             ], dtype=np.float64)
         
             # Grab observations regarding tool sections
@@ -335,9 +368,9 @@ class ToolsBaseEnvironment:
             for i, _ in enumerate(handyman.current_tool.sections):
 
                 section_properties[i] = [
-                    handyman.current_tool.sections[i].weight,
-                    handyman.current_tool.sections[i].friction,
-                    handyman.current_tool.sections[i].body.moment
+                    handyman.current_tool.sections[i].weight / self.scaling['max_weight'],
+                    handyman.current_tool.sections[i].friction / self.scaling['max_friction'],
+                    handyman.current_tool.sections[i].body.moment / self.scaling['max_moment']
                 ]
                 for j, point in enumerate(handyman.current_tool.sections[i].points):
                     section_points[i][j] = (point[0] / self.window_size[0], point[1] / self.window_size[1])
@@ -360,6 +393,14 @@ class ToolsBaseEnvironment:
 
             handyman_observations.append(handyman_observation)
 
+        # print(handyman_observations)
+        # print("Position Obs:")
+        # print(handyman_positions)
+        # print("Tool Obs:")
+        # print(handyman_tool_observations)
+        # print("Environment Obs:")
+        # print(environment_observations)
+    
         return handyman_observations
 
     def tool_section_v_environment_object_begin_callback(self, arbiter, space, data):

@@ -1,12 +1,12 @@
 num_handymen: 1
-max_cycles: 2000
+max_cycles: 5000
 
 max_tool_sections: 3
 max_vertices_per_tool_section: 9
 max_environment_objects: 5
 max_vertices_per_environment_object: 9
-max_velocity: 80
-thrust_penalty: -0.5
+max_velocity: 2
+thrust_penalty: 0.0 # -0.5
 max_acceleration: 1.0
 
 
@@ -227,7 +227,7 @@ goals:
       - chest-top:
           type: dynamic
           shape: polygon
-          weight: 5000
+          weight: 7000 # 5000
           moment: 50000000 # This needs to be very high for more stable simulations
           points:
             - point1:
@@ -369,6 +369,14 @@ goals:
         x: 560
         y: 650
       support-vector-initial-perpendicular-pull: 0 # Obtain this from hinge knowledge
+
+scaling:
+  max_angular_velocity: 400
+  max_weight: 100000000000
+  max_radius: 50
+  max_moment: 100000000000
+  max_friction: 100000000000
+
 
 offsets:
   open-the-chest:

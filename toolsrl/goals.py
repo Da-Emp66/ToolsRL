@@ -166,13 +166,14 @@ class Goal:
         self.environment_objects = [EnvironmentObject(self.space, environment_object, self.initial_point) * -self.scale for environment_object in self.environment_objects]
         self.environment_objects = [environment_object + self.initial_point if environment_object.type == "static" else environment_object for environment_object in self.environment_objects]
         
-    def __init__(self, space: pymunk.Space, description: Dict[str, Any], initial_point: Tuple[int, int] = (0, 0), coordinate_conversion_fn: Optional[Any] = lambda x: x):
+    def __init__(self, space: pymunk.Space, description: Dict[str, Any], initial_point: Tuple[int, int] = (0, 0), coordinate_conversion_fn: Optional[Any] = lambda x: x, create_now: Optional[bool] = True):
         self.space = space
         self.initial_point = initial_point
         self.coordinate_conversion_fn = coordinate_conversion_fn
         self.hinge_point_on_accomplishment_object = None
         self.load_from_dict(description)
-        self.create()
+        if create_now:
+            self.create()
 
     def _scale(self, factor: int | float) -> 'Goal':
         self.shapes = [shape * factor for shape in self.shapes]
@@ -184,17 +185,6 @@ class Goal:
     def __rmul__(self, other: int | float) -> 'Goal':
         return self._scale(other)
 
-    def goal_accomplished(self) -> bool:
-        index = None
-        for idx, environment_object in enumerate(self.environment_objects):
-            if environment_object.name == self.accomplishment_criteria['object']:
-                index = idx
-
-        if self.environment_objects[index]._is_touching((self.accomplishment_criteria['touches']['x'], self.accomplishment_criteria['touches']['y'])):
-            return True
-        
-        return False
-    
     def _get_hinge_point_on_accomplishment_object(self):
             if self.hinge_point_on_accomplishment_object is not None:
                 return self.hinge_point_on_accomplishment_object
@@ -248,8 +238,9 @@ class Goal:
         return unit_vector_aim
 
     def destroy(self):
-        self.space.remove(*list(itertools.chain(*[shapes.shapes for shapes in self.shapes])))
+        self.space.remove(*list(itertools.chain(*[shape.shapes for shape in self.shapes])))
+        self.space.remove(*[shape.body for shape in self.shapes])
         self.space.remove(*self.hinge_shapes)
-        self.space.remove(self.goal_touch_body)
+        self.space.remove(self.goal_touch_body, self.goal_touch_shape)
         return self
     

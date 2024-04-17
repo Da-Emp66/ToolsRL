@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import argparse
 import glob
 import os
 import time
 
 import supersuit as ss
 from stable_baselines3 import PPO
-from stable_baselines3.ppo import MlpPolicy
+from stable_baselines3.ppo import MlpPolicy, CnnPolicy
 
 from toolsrl.tools_raw_env import env, parallel_env, raw_env
 
@@ -16,6 +17,12 @@ def train_butterfly_supersuit(
 ):
     # Train a single model to play as each agent in a cooperative Parallel environment
     env = parallel_env(**env_kwargs)
+
+    if env_kwargs["policy"] == "cnn":
+        env = ss.color_reduction_v0(env, mode="B")
+        env = ss.resize_v1(env, x_size=84, y_size=84)
+        env = ss.frame_stack_v1(env, 3)
+
     env.reset(seed=seed)
 
     print(f"Starting training on {str(env.metadata['name'])}.")
@@ -25,15 +32,15 @@ def train_butterfly_supersuit(
 
     # Note: Waterworld's observation space is discrete (242,) so we use an MLP policy rather than CNN
     model = PPO(
-        MlpPolicy,
+        MlpPolicy if env_kwargs["policy"] == "mlp" else CnnPolicy,
         env,
         verbose=3,
-        learning_rate=1e-3,
+        learning_rate=1e-4,
         batch_size=256,
     )
 
     model.learn(total_timesteps=steps)
-    model.save(f"{env.unwrapped.metadata.get('name')}_{time.strftime('%Y%m%d-%H%M%S')}")
+    model.save(os.path.join("models", f"{env.unwrapped.metadata.get('name')}_{time.strftime('%Y%m%d-%H%M%S')}"))
     print("Model has been saved.")
     print(f"Finished training on {str(env.unwrapped.metadata['name'])}.")
     env.close()
@@ -47,7 +54,7 @@ def eval(env_constructor, num_games: int = 100, render_mode: str | None = None, 
 
     try:
         latest_policy = max(
-            glob.glob(f"{env.metadata['name']}*.zip"), key=os.path.getctime
+            glob.glob(os.path.join("models", f"{env.metadata['name']}*.zip")), key=os.path.getctime
         )
     except ValueError:
         print("Policy not found.")
@@ -81,10 +88,13 @@ def eval(env_constructor, num_games: int = 100, render_mode: str | None = None, 
 
 
 if __name__ == "__main__":
-    env_kwargs = {}
+    args = argparse.ArgumentParser()
+    args.add_argument("--policy", default="cnn", choices=["mlp", "cnn"])
+    args = args.parse_args()
+    env_kwargs = {"policy": args.policy}
 
-    # Train a model (takes ~3 minutes on GPU)
-    train_butterfly_supersuit(parallel_env, steps=4096, seed=41, **env_kwargs)
+    # Train a model
+    train_butterfly_supersuit(parallel_env, steps=1, seed=41, **env_kwargs) # 1228800
 
     # Evaluate 10 games (average reward should be positive but can vary significantly)
     eval(env, num_games=10, render_mode=None, **env_kwargs)

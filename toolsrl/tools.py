@@ -102,6 +102,7 @@ class Tool:
     
     def destroy(self):
         self.space.remove(*list(itertools.chain(*[shapes.shapes for shapes in self.shapes])))
+        self.space.remove(self.body, self.grip, self.rotation_joint)
         return self
 
     def load_from_dict(self, description: Dict[str, Any]):
@@ -151,7 +152,7 @@ class Tool:
         self.grip.position = x, y
 
     def reset_velocity(self, vx, vy):
-        self.body.velocity = vx, vy
+        self.grip.velocity = vx, vy
 
     def flip_orientation(self, axis: Literal['x', 'y']):
         self.orientation ^= 1
@@ -168,7 +169,7 @@ class Tool:
         self.create()
 
     def reset(self, position: Optional[Tuple[int, int]] = None):
-        self.destroy()
+        self.space.remove(*list(itertools.chain(*[shapes.shapes for shapes in self.shapes])))
         if position is not None:
             self.reset_position(*position)
         self.create()
