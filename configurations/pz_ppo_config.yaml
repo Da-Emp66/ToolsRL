@@ -1,5 +1,5 @@
 num_handymen: 1
-max_cycles: 5000
+max_cycles: 400
 
 max_tool_sections: 3
 max_vertices_per_tool_section: 9
@@ -12,7 +12,7 @@ max_acceleration: 1.0
 
 tool_touching_dynamic_object_reward: 10
 tool_separating_from_dynamic_object_reward: 4
-tool_touching_static_object_reward: -3
+tool_touching_static_object_reward: -17
 tool_separating_from_static_object_reward: 1
 
 tool_following_support_vector_reward: 10
@@ -232,10 +232,10 @@ goals:
           points:
             - point1:
                 x: 0
-                y: 61
+                y: 65
             - point2:
                 x: 140
-                y: 61
+                y: 65
             - point3:
                 x: 120
                 y: 80
@@ -251,7 +251,7 @@ goals:
           - chest-top:
               point:
                 x: 0
-                y: 61
+                y: 65
     accomplishment-criteria:
       object: chest-top
       touches:

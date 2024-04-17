@@ -30,7 +30,7 @@ class ToolsBaseEnvironment:
             self,
             policy: Literal["mlp", "cnn"],
             configuration_filename: str = DEFAULT_CONFIG,
-            render_mode: Optional[Literal["human", "rgb_array"]] = "rgb_array",
+            render_mode: Optional[Literal["human", "rgb_array"]] = None,
         ):
         print(f"Using {policy.upper()} policy...")
         self.policy = policy
@@ -306,9 +306,14 @@ class ToolsBaseEnvironment:
 
     def observe_list(self):
         if self.policy == "cnn":
+            self.screen.fill((255, 255, 255))
+            draw_options = pymunk.pygame_util.DrawOptions(self.screen)
+            self.space.debug_draw(draw_options)
+            self.clock.tick(self.fps)
             observation = pygame.surfarray.pixels3d(self.screen)
             observation = np.rot90(observation, k=3)
             observation = np.fliplr(observation)
+            # print(observation.tolist())
             return [observation for _ in self.handymen]
         
         accomplishment_criteria = self.description['goals'][self.goal.name]['accomplishment-criteria']
@@ -439,13 +444,14 @@ class ToolsBaseEnvironment:
             else:
                 self.screen = pygame.Surface((self.window_size[0], self.window_size[1]))
 
-        self.screen.fill((255, 255, 255))
-        draw_options = pymunk.pygame_util.DrawOptions(self.screen)
-        self.space.debug_draw(draw_options)
-        # space.step(1/FPS)
-        # pygame.display.flip()
-        # clock.tick(int(FPS))
-        self.clock.tick(self.fps)
+        if self.policy == "mlp":
+            self.screen.fill((255, 255, 255))
+            draw_options = pymunk.pygame_util.DrawOptions(self.screen)
+            self.space.debug_draw(draw_options)
+            # space.step(1/FPS)
+            # pygame.display.flip()
+            # clock.tick(int(FPS))
+            self.clock.tick(self.fps)
 
         observation = pygame.surfarray.pixels3d(self.screen)
         new_observation = np.copy(observation)
@@ -454,6 +460,8 @@ class ToolsBaseEnvironment:
         if self.render_mode == "human":
             pygame.event.pump()
             pygame.display.update()
+            # if self.policy == "cnn":
+            #     self.clock.tick(self.fps)
         return (
             np.transpose(new_observation, axes=(1, 0, 2))
             if self.render_mode == "rgb_array"

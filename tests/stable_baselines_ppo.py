@@ -40,21 +40,26 @@ def train_butterfly_supersuit(
     )
 
     model.learn(total_timesteps=steps)
-    model.save(os.path.join("models", f"{env.unwrapped.metadata.get('name')}_{time.strftime('%Y%m%d-%H%M%S')}"))
+    model.save(os.path.join("models", f"{env_kwargs['policy']}-{env.unwrapped.metadata.get('name')}_{time.strftime('%Y%m%d-%H%M%S')}"))
     print("Model has been saved.")
     print(f"Finished training on {str(env.unwrapped.metadata['name'])}.")
     env.close()
 
 
-def eval(env_constructor, num_games: int = 100, render_mode: str | None = None, **env_kwargs):
+def eval(env_constructor, num_games: int = 100, render_mode: str | None = None, deterministic: bool = False, **env_kwargs):
     # Evaluate a trained agent vs a random agent
     env = env_constructor(render_mode=render_mode, **env_kwargs)
+
+    if env_kwargs["policy"] == "cnn":
+        env = ss.color_reduction_v0(env, mode="B")
+        env = ss.resize_v1(env, x_size=84, y_size=84)
+        env = ss.frame_stack_v1(env, 3)
 
     print(f"\nStarting evaluation on {str(env.metadata['name'])} (num_games={num_games}, render_mode={render_mode})")
 
     try:
         latest_policy = max(
-            glob.glob(os.path.join("models", f"{env.metadata['name']}*.zip")), key=os.path.getctime
+            glob.glob(os.path.join("models", f"{env_kwargs['policy']}-{env.metadata['name']}*.zip")), key=os.path.getctime
         )
     except ValueError:
         print("Policy not found.")
@@ -76,7 +81,7 @@ def eval(env_constructor, num_games: int = 100, render_mode: str | None = None, 
             if termination or truncation:
                 break
             else:
-                act = model.predict(obs, deterministic=True)[0]
+                act = model.predict(obs, deterministic=deterministic)[0]
 
             env.step(act)
     env.close()
@@ -90,14 +95,17 @@ def eval(env_constructor, num_games: int = 100, render_mode: str | None = None, 
 if __name__ == "__main__":
     args = argparse.ArgumentParser()
     args.add_argument("--policy", default="cnn", choices=["mlp", "cnn"])
+    args.add_argument("--deterministic", default="False", choices=["True", "False"])
+    args.add_argument("--steps", default=4096, type=int) # MLP takes about 15 secs per step on GPU, CNN takes about 4 minutes per step on GPU
     args = args.parse_args()
     env_kwargs = {"policy": args.policy}
+    args.deterministic = True if args.deterministic == "True" else False
 
     # Train a model
-    train_butterfly_supersuit(parallel_env, steps=1, seed=41, **env_kwargs) # 1228800
+    train_butterfly_supersuit(parallel_env, steps=args.steps, seed=41, **env_kwargs)
 
-    # Evaluate 10 games (average reward should be positive but can vary significantly)
-    eval(env, num_games=10, render_mode=None, **env_kwargs)
+    # Evaluate 1 game
+    # eval(env, num_games=1, render_mode=None, deterministic=args.deterministic, **env_kwargs)
 
     # Watch 2 games
-    eval(env, num_games=2, render_mode="human", **env_kwargs)
+    eval(env, num_games=2, render_mode="human", deterministic=args.deterministic, **env_kwargs)
