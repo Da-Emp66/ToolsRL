@@ -1,5 +1,5 @@
 num_handymen: 1
-max_cycles: 400
+max_cycles: 800
 
 max_tool_sections: 3
 max_vertices_per_tool_section: 9

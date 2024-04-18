@@ -96,13 +96,16 @@ if __name__ == "__main__":
     args = argparse.ArgumentParser()
     args.add_argument("--policy", default="cnn", choices=["mlp", "cnn"])
     args.add_argument("--deterministic", default="False", choices=["True", "False"])
-    args.add_argument("--steps", default=4096, type=int) # MLP takes about 15 secs per step on GPU, CNN takes about 4 minutes per step on GPU
+    args.add_argument("--steps", default=409600, type=int)
+    args.add_argument("--train", default="False", choices=["True", "False"])
     args = args.parse_args()
     env_kwargs = {"policy": args.policy}
     args.deterministic = True if args.deterministic == "True" else False
+    args.train = True if args.train == "True" else False
 
     # Train a model
-    train_butterfly_supersuit(parallel_env, steps=args.steps, seed=41, **env_kwargs)
+    if args.train:
+        train_butterfly_supersuit(parallel_env, steps=args.steps, seed=41, **env_kwargs)
 
     # Evaluate 1 game
     # eval(env, num_games=1, render_mode=None, deterministic=args.deterministic, **env_kwargs)
