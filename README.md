@@ -24,7 +24,7 @@ Important notes:
 
  - All independent work for this project is outside the `references/` folder.
    The `references/` folder is the only folder in this project that I did not code up.
-   I found these resources online to help guide my development throughout the project.
+   I found the resources in `references/` online to help guide my development throughout the project.
 
  - You can edit the `configurations/pz_ppo_config.yaml` to use custom tools and goals
    to test in the sandbox and use in the reinforcement learning environment.
